@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TranscribeFlow - AI Audio Transcription</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;800&family=Playfair+Display:ital,wght@1,900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <style>
+        #vanta-bg { position: fixed; z-index: -1; top: 0; left: 0; width: 100%; height: 100vh; background-color: #0a0a0a; }
+        body { margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; display: flex; flex-direction: column; align-items: center; color: white; min-height: 100vh; overflow-x: hidden; }
+        
+        .nav-header { position: absolute; top: 0; left: 0; width: 100%; padding: 30px 50px; box-sizing: border-box; z-index: 10; }
+        .logo-text { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: 900; font-style: italic; background: linear-gradient(to right, #00ffff, #ffffff); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; cursor: pointer; }
+        
+        #landing-view {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; width: 100%; text-align: center; z-index: 5;
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        
+        .landing-title { font-size: clamp(48px, 8vw, 90px); font-weight: 800; letter-spacing: -4px; line-height: 0.9; margin-bottom: 30px; background: linear-gradient(to bottom, #fff, #666); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .start-btn {
+            background: #fff; color: #000; border: none; padding: 22px 50px; font-size: 18px; font-weight: 800; 
+            border-radius: 100px; cursor: pointer; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 10px 30px rgba(255,255,255,0.1);
+        }
+        .start-btn:hover { transform: scale(1.05); background: #00ffff; box-shadow: 0 0 30px rgba(0, 255, 255, 0.5); }
+
+        #app-view {
+            display: none; flex-direction: column; align-items: center; width: 100%; padding: 120px 20px 80px 20px;
+            opacity: 0; transform: translateY(30px); transition: opacity 1s ease, transform 1s ease;
+        }
+
+        .hero-section { text-align: center; margin-bottom: 50px; }
+        .hero-headline { font-size: clamp(32px, 5vw, 64px); font-weight: 800; line-height: 1.1; margin-bottom: 20px; background: linear-gradient(135deg, #ffffff 0%, #a5a5a5 100%); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -2px; }
+        
+        .upload-card {
+            position: relative;
+            width: 100%; max-width: 520px; background: rgba(255, 255, 255, 0.04); backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 35px; padding: 40px; box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            z-index: 2;
+        }
+
+        .result-panel {
+            width: 100%; max-width: 800px; background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(40px);
+            border: 1px solid rgba(0, 255, 255, 0.2); border-radius: 35px; padding: 40px; margin-top: 30px; margin-bottom: 50px;
+            animation: fadeIn 0.8s ease-out; box-sizing: border-box;
+        }
+        .result-label { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #00ffff; text-transform: uppercase; margin-bottom: 15px; display: block; opacity: 0.8; }
+        
+        .transcript-box { 
+            background: rgba(255, 255, 255, 0.03); 
+            padding: 30px; 
+            border-radius: 20px; 
+            border: 1px solid rgba(255, 255, 255, 0.08); 
+            color: #f0f0f0; 
+            line-height: 2.2; 
+            margin-bottom: 30px; 
+            font-size: 15px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            max-height: 450px; 
+            overflow-y: auto;
+            white-space: pre-wrap;
+            scrollbar-width: thin;
+            scrollbar-color: #00ffff rgba(255, 255, 255, 0.1);
+            scroll-behavior: smooth;
+        }
+
+        .timestamp {
+            color: #000 !important;
+            font-weight: 800;
+            background: #00ffff;
+            padding: 2px 10px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-right: 8px;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+            vertical-align: middle;
+            line-height: 1;
+        }
+
+        .transcript-box::-webkit-scrollbar { width: 6px; }
+        .transcript-box::-webkit-scrollbar-thumb { background-color: #00ffff; border-radius: 100px; }
+
+        .summary-box { background: rgba(0, 255, 255, 0.05); padding: 30px; border-radius: 20px; border: 1px solid rgba(0, 255, 255, 0.2); color: #00ffff; font-style: italic; line-height: 1.6; font-size: 18px; margin-bottom: 30px; }
+
+        .report-controls {
+            display: flex; gap: 10px; margin-bottom: 25px; align-items: center; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 20px;
+        }
+        .lang-select {
+            flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 12px; padding: 10px; color: white; font-weight: 600; outline: none;
+        }
+        .translate-action-btn {
+            background: #00ffff; color: #000; border: none; padding: 10px 20px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.3s;
+        }
+        .translate-action-btn:hover { background: #00ff88; transform: scale(1.02); }
+
+        .download-actions {
+            display: flex; gap: 15px; justify-content: center; margin-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 25px;
+        }
+
+        .download-btn {
+            background: rgba(255, 255, 255, 0.05); color: #00ffff; border: 1px solid rgba(0, 255, 255, 0.2); padding: 12px 25px;
+            border-radius: 15px; font-size: 13px; font-weight: 800; text-decoration: none; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .download-btn:hover { background: rgba(0, 255, 255, 0.1); border-color: #00ffff; transform: translateY(-3px); }
+
+        .drop-zone {
+            position: relative; padding: 40px 20px; border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 30px; display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; transition: 0.4s; background: rgba(255, 255, 255, 0.01);
+        }
+
+        .upload-pod { width: 80px; height: 80px; background: rgba(255, 255, 255, 0.05); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; border: 1px solid rgba(0, 255, 255, 0.2); }
+        .pulse-ring { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #00ffff; animation: ripple 2s infinite; opacity: 0; }
+        #icon { font-size: 35px; filter: drop-shadow(0 0 10px #00ffff); transition: 0.3s; }
+
+        @keyframes ripple { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
+
+        .submit-btn { width: 100%; background: #fff; color: #000; border: none; padding: 18px; font-size: 16px; font-weight: 800; border-radius: 50px; cursor: pointer; margin-top: 20px; transition: 0.3s; }
+        .submit-btn:hover { background: #00ffff; box-shadow: 0 0 20px rgba(0, 255, 255, 0.4); }
+        .submit-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+        #preview-container { display: none; margin-top: 25px; width: 100%; text-align: center; }
+        #preview-container p { font-size: 11px; color: #00ffff; margin-bottom: 10px; font-weight: 800; letter-spacing: 1.5px; }
+        .preview-audio-player { width: 100%; height: 40px; border-radius: 12px; filter: invert(100%) hue-rotate(180deg) brightness(1.5); }
+
+        .file-list-container { width: 100%; max-width: 800px; padding-bottom: 50px; }
+        .file-item { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 20px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 15px; }
+        
+        .error-message { color: #ff3c3c; font-size: 12px; font-weight: 800; margin-top: 10px; display: none; text-align: center; }
+        
+        .progress-container { width: 100%; max-width: 800px; margin-top: 30px; padding: 35px; background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.2); border-radius: 30px; display: none; backdrop-filter: blur(10px); }
+        .progress-bar { width: 100%; height: 10px; background: rgba(0, 255, 255, 0.1); border-radius: 20px; overflow: hidden; margin-bottom: 20px; border: 1px solid rgba(0, 255, 255, 0.1); }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #00ffff, #00ff88, #00ffff); background-size: 200% 100%; animation: shimmer 2s linear infinite; width: 0%; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 20px; }
+        .progress-message { text-align: center; color: #fff; font-size: 15px; font-weight: 600; min-height: 22px; transition: 0.3s; letter-spacing: 0.5px; }
+        
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .success-toast { 
+            position: fixed; top: 40px; left: 50%; transform: translateX(-50%); 
+            background: #00ffff; color: #000; padding: 16px 35px; border-radius: 100px;
+            font-weight: 800; font-size: 14px; box-shadow: 0 10px 50px rgba(0,0,0,0.8);
+            z-index: 99999; opacity: 0; transition: 0.5s; pointer-events: none;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        audio:not(.preview-audio-player) { width: 100%; height: 35px; filter: invert(100%) hue-rotate(180deg) brightness(1.5); }
+    </style>
+</head>
+<body>
+    <div id="vanta-bg"></div>
+    <div id="toast-message" class="success-toast">UPLOAD SUCCESSFUL</div>
+    
+    <header class="nav-header">
+        <div class="logo-text" onclick="window.location.reload()">TranscribeFlow</div>
+    </header>
+
+    <section id="landing-view">
+        <h1 class="landing-title">Audio to Insight<br>Instantly.</h1>
+        <p style="opacity: 0.5; margin-bottom: 40px; max-width: 400px; line-height: 1.6;">Leverage professional-grade AI to transcribe and summarize your meetings, lectures, and voice notes.</p>
+        <button class="start-btn" onclick="enterApp()">Start Transcribing</button>
+    </section>
+
+    <main id="app-view">
+        <div class="hero-section">
+            <h1 class="hero-headline">Full Audio Analysis</h1>
+            <p style="opacity:0.6;">Transcribe, summarize, and archive with precision.</p>
+        </div>
+
+        <div class="upload-card">
+            <form id="main-upload-form" enctype="multipart/form-data">
+                <label for="audio-input" class="drop-zone">
+                    <div class="upload-pod"><div class="pulse-ring" id="pulse"></div><div id="icon">🎧</div></div>
+                    <div id="text-wrap" style="text-align: center;">
+                        <span style="font-weight: 800; font-size: 18px; display: block;">Select Audio</span>
+                        <span style="font-size: 12px; opacity: 0.5;">MP3, WAV</span>
+                    </div>
+                    <span id="file-name-display" style="margin-top: 10px; color: #00ffff; font-weight: 800; text-align: center;"></span>
+                    <input type="file" name="audio" id="audio-input" style="display: none;" required>
+                    <div id="format-error" class="error-message">Error: Invalid audio format.</div>
+                </label>
+
+                <div id="preview-container">
+                    <p>LIVE PREVIEW</p>
+                    <audio id="audio-live-preview" class="preview-audio-player" controls></audio>
+                </div>
+
+                <button type="submit" id="submit-btn" class="submit-btn">Transcribe Now</button>
+            </form>
+        </div>
+
+        <div id="progress-container" class="progress-container">
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+            <div class="progress-message" id="progress-message">Waking up the neural engine...</div>
+            <div id="progress-percent" style="text-align:center; color:#00ff88; font-weight:800; margin-top:10px; font-size: 18px; letter-spacing: 1px;">0%</div>
+        </div>
+
+        <div id="dynamic-result-panel" class="result-panel" style="display: none;">
+            <h2 style="font-family: 'Playfair Display', serif; font-size: 32px; margin-bottom: 35px; text-align: center; background: linear-gradient(to right, #00ffff, #ffffff); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Intelligence Report</h2>
+            
+            <span class="result-label">Report Tools</span>
+            <div class="report-controls">
+                <input type="text" id="transcript-search" class="lang-select" placeholder="🔍 Search keywords..." oninput="searchTerm()">
+                <button id="autoscroll-btn" class="translate-action-btn" onclick="toggleAutoScroll()" style="background: rgba(255,255,255,0.1); color: white; border: 1px solid #00ffff; min-width: 140px;">Auto-Scroll: OFF</button>
+            </div>
+
+            <span class="result-label">Translate Report</span>
+            <div class="report-controls">
+                <select id="report-lang-select" class="lang-select">
+                    <option value="en">English (Original)</option>
+                    <option value="hi">Hindi (हिन्दी)</option>
+                    <option value="es">Spanish (Español)</option>
+                    <option value="fr">French (Français)</option>
+                    <option value="de">German (Deutsch)</option>
+                    <option value="zh-CN">Chinese (Simplified)</option>
+                    <option value="ja">Japanese (日本語)</option>
+                    <option value="ar">Arabic (العربية)</option>
+                </select>
+                <button id="translate-btn" class="translate-action-btn" onclick="translateReport()">Update Language</button>
+            </div>
+
+            <span class="result-label">Full Transcription</span>
+            <div id="dynamic-transcript-box" class="transcript-box"></div>
+
+            <span class="result-label">AI Summary</span>
+            <div id="dynamic-summary-box" class="summary-box"></div>
+
+            <div class="download-actions">
+                <a id="current-download-txt" href="#" class="download-btn"><span>📄</span> Export TXT</a>
+                <a id="current-download-pdf" href="#" class="download-btn"><span>📕</span> Export PDF</a>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 800px; margin-top: 40px; margin-bottom: 20px;">
+            <h2 style="margin: 0;">History</h2>
+            {% if files %}
+            <button onclick="confirmPurge()" style="background: rgba(255, 100, 0, 0.1); color: #ff8c00; border: 1px solid rgba(255, 140, 0, 0.3); padding: 10px 20px; border-radius: 15px; font-size: 12px; font-weight: 800; cursor: pointer;">PURGE ALL</button>
+            {% endif %}
+        </div>
+
+        <div class="file-list-container">
+            {% if files %}
+                {% for file in files %}
+                    <div class="file-item" id="file-{{ loop.index }}">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <span style="font-weight: 600; display:block;">📄 {{ file.name }}</span>
+                                <span style="font-size:10px; opacity:0.5;">{{ file.time }}</span>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <a href="{{ url_for('download_file', filename=file.name, type='txt') }}" style="text-decoration: none; font-size: 12px; color: #00ffff; font-weight: 800;">TXT</a>
+                                <a href="{{ url_for('download_file', filename=file.name, type='pdf') }}" style="text-decoration: none; font-size: 12px; color: #00ffff; font-weight: 800;">PDF</a>
+                                <button onclick="confirmDelete('{{ file.name }}', 'file-{{ loop.index }}')" style="background:none; border:none; color:#ff3c3c; cursor:pointer; font-weight:800; font-size:12px;">DELETE</button>
+                            </div>
+                        </div>
+                        <audio controls>
+                            <source src="{{ url_for('serve_audio', filename=file.name) }}" type="audio/mpeg">
+                        </audio>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p style="text-align: center; opacity: 0.4;">No history found.</p>
+            {% endif %}
+        </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js"></script>
+
+    <script>
+        let masterTranscript = ""; 
+        let masterSummary = "";
+        let isAutoScroll = false;
+        let currentDisplayTranscript = "";
+        let currentFilename = "";
+
+        const loadingMessages = [
+            "Waking up the AI models...",
+            "Listening closely to every frequency...",
+            "Whisper AI is translating thoughts to text...",
+            "Filtering out background noise...",
+            "Extracting core intelligence...",
+            "Polishing the final transcript...",
+            "Synthesizing your report...",
+            "Finalizing the linguistic structure..."
+        ];
+
+        function confirmPurge() {
+            Swal.fire({
+                title: 'Purge All History?',
+                text: "This will permanently delete all recordings and transcripts!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ff8c00',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, Purge All',
+                background: '#1a1a1a',
+                color: '#fff',
+                iconColor: '#ff8c00'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/clear_all';
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+            });
+        }
+
+        function confirmDelete(filename, elementId) {
+            Swal.fire({
+                title: 'Delete File?',
+                text: `You are about to delete ${filename}`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ff3c3c',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, delete it!',
+                background: '#1a1a1a',
+                color: '#fff',
+                iconColor: '#ff3c3c'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    fetch(`/delete/${filename}`, { method: 'POST' })
+                    .then(res => {
+                        if (res.ok) {
+                            if (document.getElementById(elementId)) {
+                                document.getElementById(elementId).style.display = 'none';
+                            }
+                            launchToast("FILE DELETED", "delete");
+                        }
+                    });
+                }
+            });
+        }
+
+        function searchTerm() {
+            const query = document.getElementById('transcript-search').value.toLowerCase();
+            const box = document.getElementById('dynamic-transcript-box');
+            let text = currentDisplayTranscript.replace(/\[(\d{2}:\d{2}(?::\d{2})?\s*-\s*\d{2}:\d{2}(?::\d{2})?)\]/g, '<span class="timestamp">$1</span>');
+            if (query.length > 1) {
+                const regex = new RegExp(`(${query})`, 'gi');
+                text = text.replace(regex, '<mark style="background: #ffff00; color: #000; border-radius: 2px; padding: 0 2px;">$1</mark>');
+            }
+            box.innerHTML = text;
+        }
+
+        function toggleAutoScroll() {
+            isAutoScroll = !isAutoScroll;
+            const btn = document.getElementById('autoscroll-btn');
+            btn.innerText = isAutoScroll ? "Auto-Scroll: ON" : "Auto-Scroll: OFF";
+            btn.style.background = isAutoScroll ? "#00ffff" : "rgba(255,255,255,0.1)";
+            btn.style.color = isAutoScroll ? "#000" : "#fff";
+        }
+
+        function handleAutoScroll() {
+            if (isAutoScroll) {
+                const box = document.getElementById('dynamic-transcript-box');
+                box.scrollTop = box.scrollHeight;
+            }
+        }
+
+        window.enterApp = function() {
+            const landingView = document.getElementById('landing-view');
+            const appView = document.getElementById('app-view');
+            landingView.style.opacity = '0';
+            setTimeout(() => {
+                landingView.style.display = 'none';
+                appView.style.display = 'flex';
+                setTimeout(() => { appView.style.opacity = '1'; appView.style.transform = 'translateY(0)'; }, 50);
+            }, 800);
+        };
+
+        window.onload = function() {
+            if (typeof VANTA !== 'undefined') {
+                VANTA.WAVES({ el: "#vanta-bg", mouseControls: true, color: 0x070707, waveHeight: 15 });
+            }
+
+            const input = document.getElementById('audio-input');
+            const nameDisplay = document.getElementById('file-name-display');
+            const audioPreview = document.getElementById('audio-live-preview');
+            const submitBtn = document.getElementById('submit-btn');
+
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    nameDisplay.textContent = "✓ " + file.name;
+                    audioPreview.src = URL.createObjectURL(file);
+                    document.getElementById('preview-container').style.display = "block";
+                    document.getElementById('text-wrap').style.display = "none";
+                    document.getElementById('icon').innerHTML = "✅";
+                }
+            };
+            
+            const uploadForm = document.getElementById('main-upload-form');
+            uploadForm.onsubmit = function(e) {
+                e.preventDefault();
+                submitBtn.disabled = true;
+                submitBtn.innerText = "Uploading...";
+                
+                const formData = new FormData(uploadForm);
+                
+                fetch('/upload', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.filename) { 
+                        launchToast("UPLOAD SUCCESSFUL");
+                        document.getElementById('progress-container').style.display = 'block';
+                        currentFilename = data.filename; 
+                        pollStatus(data.filename);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Upload Error',
+                            text: data.error || "Unknown Error",
+                            background: '#1a1a1a',
+                            color: '#fff'
+                        });
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = "Transcribe Now";
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = "Transcribe Now";
+                });
+            };
+        };
+
+        function pollStatus(filename) {
+            const interval = setInterval(() => {
+                fetch(`/check_status/${encodeURIComponent(filename)}`)
+                .then(res => res.json())
+                .then(data => {
+                    const fill = document.getElementById('progress-fill');
+                    const percentText = document.getElementById('progress-percent');
+                    const msgText = document.getElementById('progress-message');
+
+                    if (data.progress) {
+                        fill.style.width = data.progress + '%';
+                        percentText.textContent = data.progress + '%';
+                    }
+                    
+                    if (data.status === 'processing') {
+                        // Backend is sending progress updates. 
+                        // If progress is between 65 and 80, we know it's in the T5 Summarization phase
+                        if (data.progress > 65 && data.progress < 85) {
+                            msgText.textContent = "AI generating concise summary...";
+                        } else {
+                            msgText.textContent = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+                        }
+                    }
+
+                    if (data.status === 'error') {
+                        clearInterval(interval);
+                        Swal.fire({ icon: 'error', title: 'Processing Failed', text: data.message });
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = "Transcribe Now";
+                        document.getElementById('progress-container').style.display = 'none';
+                    }
+
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        masterTranscript = data.transcript; 
+                        masterSummary = data.summary;
+                        
+                        document.getElementById('current-download-txt').href = `/download/${encodeURIComponent(filename)}?type=txt&lang=en`;
+                        document.getElementById('current-download-pdf').href = `/download/${encodeURIComponent(filename)}?type=pdf&lang=en`;
+                        
+                        displayResults(data.transcript, data.summary);
+                        document.getElementById('progress-container').style.display = 'none';
+                        document.getElementById('submit-btn').innerText = "Transcribe Now";
+                        document.getElementById('submit-btn').disabled = false;
+                    }
+                })
+                .catch(err => console.error("Polling error:", err));
+            }, 1500);
+        }
+
+        function translateReport() {
+            const targetLang = document.getElementById('report-lang-select').value;
+            const translateBtn = document.getElementById('translate-btn');
+            
+            if (targetLang === 'en') {
+                document.getElementById('current-download-txt').href = `/download/${encodeURIComponent(currentFilename)}?type=txt&lang=en`;
+                document.getElementById('current-download-pdf').href = `/download/${encodeURIComponent(currentFilename)}?type=pdf&lang=en`;
+                displayResults(masterTranscript, masterSummary);
+                return;
+            }
+
+            translateBtn.innerText = "Translating...";
+            translateBtn.disabled = true;
+
+            fetch('/translate_on_fly', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    transcript: masterTranscript, 
+                    summary: masterSummary,
+                    target: targetLang 
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    displayResults(data.translated_text, data.translated_summary);
+                    document.getElementById('current-download-txt').href = `/download/${encodeURIComponent(currentFilename)}?type=txt&lang=${targetLang}`;
+                    document.getElementById('current-download-pdf').href = `/download/${encodeURIComponent(currentFilename)}?type=pdf&lang=${targetLang}`;
+                    launchToast("Language Updated!");
+                }
+                translateBtn.innerText = "Update Language";
+                translateBtn.disabled = false;
+            })
+            .catch(() => {
+                launchToast("Translation Error", "delete");
+                translateBtn.disabled = false;
+            });
+        }
+
+        function displayResults(transcript, summary) {
+            const resultPanel = document.getElementById('dynamic-result-panel');
+            const transcriptBox = document.getElementById('dynamic-transcript-box');
+            const summaryBox = document.getElementById('dynamic-summary-box');
+            
+            currentDisplayTranscript = transcript;
+            document.getElementById('transcript-search').value = "";
+
+            const highlighted = transcript.replace(/\[(\d{2}:\d{2}(?::\d{2})?\s*-\s*\d{2}:\d{2}(?::\d{2})?)\]/g, '<span class="timestamp">$1</span>');
+            
+            transcriptBox.innerHTML = highlighted;
+            // Handle T5 Summary specifically
+            summaryBox.textContent = summary || "No summary available (text might be too short)";
+            
+            resultPanel.style.display = 'block';
+            
+            if (!isAutoScroll) {
+                resultPanel.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                handleAutoScroll();
+            }
+        }
+
+        function launchToast(message, type = "success") {
+            const toast = document.getElementById('toast-message');
+            toast.textContent = message;
+            toast.style.background = (type === "delete") ? "#ff3c3c" : "#00ffff";
+            toast.style.opacity = '1';
+            setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+        }
+    </script>
+</body>
+</html>
