@@ -1,0 +1,14 @@
+Flask
+Werkzeug
+PyJWT
+passlib
+argon2-cffi
+openai-whisper
+deep-translator
+fpdf2
+arabic-reshaper
+python-bidi
+transformers
+sentencepiece
+torch
+torchaudio
