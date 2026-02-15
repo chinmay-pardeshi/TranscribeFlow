@@ -42,19 +42,53 @@
         .btn-signup:hover svg { transform: rotate(15deg) scale(1.2); }
         .user-greeting { font-size: 14px; font-weight: 600; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
 
-        /* ROBOT MASCOT */
+        /* ROBOT MASCOT & SPEECH BUBBLE */
         .bot-container {
             position: fixed; bottom: 40px; right: 40px; width: 140px; height: 140px;
             z-index: 100; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6));
             animation: floatBot 4s ease-in-out infinite; cursor: pointer;
         }
         @keyframes floatBot { 0% { transform: translateY(0); } 50% { transform: translateY(-15px); } 100% { transform: translateY(0); } }
+        
         .bot-body { width: 100%; height: 100%; background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0, #a0a0a0); border-radius: 50%; position: relative; box-shadow: inset -10px -10px 20px rgba(0,0,0,0.5); }
         .bot-body::before { content: ''; position: absolute; left: -8px; top: 50%; transform: translateY(-50%); width: 15px; height: 30px; background: #c0c0c0; border-radius: 10px 0 0 10px; box-shadow: inset -2px 0 5px rgba(0,0,0,0.3); }
         .bot-screen { position: absolute; top: 22%; left: 15%; width: 75%; height: 55%; background: black; border-radius: 40% 40% 45% 45%; box-shadow: inset 0 0 15px #00ffff; overflow: hidden; display: flex; justify-content: center; align-items: center; gap: 18px; }
         .bot-eye { width: 14px; height: 30px; background: linear-gradient(180deg, #00ffff, #0088ff); border-radius: 20px; box-shadow: 0 0 15px #00ffff; position: relative; }
         .bot-eye.star-mode { width: 28px; height: 28px; border-radius: 0; background: #ffd700; box-shadow: 0 0 20px #ffff00, 0 0 40px #ffd700; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); transform: rotate(180deg) !important; transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
         .bot-shine { position: absolute; top: 15%; right: 20%; width: 20px; height: 10px; background: rgba(255,255,255,0.8); border-radius: 50%; transform: rotate(-45deg); }
+
+        /* Speech Bubble Styling */
+        .bot-bubble {
+            position: absolute;
+            bottom: 160px; /* Above the bot */
+            right: 20px;
+            width: 220px;
+            background: rgba(20, 20, 20, 0.9);
+            border: 1px solid #00ffff;
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 20px 20px 0 20px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.5;
+            text-align: right;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+            opacity: 0;
+            transform: translateY(10px) scale(0.9);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+        }
+        .bot-bubble.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .bot-bubble::after {
+            content: ''; position: absolute; bottom: -8px; right: 0;
+            width: 0; height: 0;
+            border-left: 10px solid transparent;
+            border-top: 10px solid #00ffff;
+        }
 
         /* ========================================================
            AUTH MODAL
@@ -135,8 +169,7 @@
             font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; font-weight: 900;
             color: #fff; text-shadow: 0 0 20px rgba(0,255,255,0.5); position: relative; padding-bottom: 15px;
         }
-        /* REMOVED THE BLUE UNDERLINE (::after) HERE */
-
+        
         .steps-container { 
             display: flex; justify-content: space-between; gap: 30px; position: relative; flex-wrap: wrap; 
         }
@@ -259,6 +292,49 @@
         .success-toast { position: fixed; top: 40px; left: 50%; transform: translateX(-50%); background: #00ffff; color: #000; padding: 16px 35px; border-radius: 100px; font-weight: 800; font-size: 14px; box-shadow: 0 10px 50px rgba(0,0,0,0.8); z-index: 99999; opacity: 0; transition: 0.5s; pointer-events: none; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         audio:not(.preview-audio-player) { width: 100%; height: 35px; filter: invert(100%) hue-rotate(180deg) brightness(1.5); }
+
+        /* --- NEW CSS FOR SORTING FILTER --- */
+        .filter-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-top: 40px;
+        }
+        .sort-select {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            color: #00ffff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            outline: none;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .sort-select option {
+            background: #1a1a1a;
+            color: #fff;
+            padding: 10px;
+        }
+        .file-meta {
+            display: flex;
+            gap: 10px;
+            font-size: 10px;
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+        .meta-tag {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -289,6 +365,7 @@
                 <div class="bot-eye right-eye"></div>
             </div>
         </div>
+        <div id="bot-bubble" class="bot-bubble"></div>
     </div>
 
     <div id="auth-modal" class="modal-overlay" onclick="handleModalBgClick(event)">
@@ -488,21 +565,40 @@
             </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 800px; margin-top: 40px; margin-bottom: 20px;">
+        <div class="filter-bar">
             <h2 style="margin: 0;">History</h2>
-            {% if files %}
-            <button onclick="confirmPurge()" style="background: rgba(255, 100, 0, 0.1); color: #ff8c00; border: 1px solid rgba(255, 140, 0, 0.3); padding: 10px 20px; border-radius: 15px; font-size: 12px; font-weight: 800; cursor: pointer;">PURGE ALL</button>
-            {% endif %}
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <span style="font-size: 12px; opacity: 0.6;">Sort by:</span>
+                <select id="sort-filter" class="sort-select" onchange="sortFiles()">
+                    <option value="newest">🕒 Newest Upload</option>
+                    <option value="oldest">🕒 Oldest Upload</option>
+                    <option value="size-desc">💾 Size (Largest)</option>
+                    <option value="size-asc">💾 Size (Smallest)</option>
+                    <option value="type">📂 File Type</option>
+                </select>
+                {% if files %}
+                <button onclick="confirmPurge()" style="background: rgba(255, 60, 60, 0.1); color: #ff3c3c; border: 1px solid rgba(255, 60, 60, 0.3); padding: 8px 15px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; margin-left: 10px;">PURGE ALL</button>
+                {% endif %}
+            </div>
         </div>
 
-        <div class="file-list-container">
+        <div class="file-list-container" id="file-list-root">
             {% if files %}
                 {% for file in files %}
-                    <div class="file-item" id="file-{{ loop.index }}">
+                    <div class="file-item" 
+                         id="file-{{ loop.index }}" 
+                         data-timestamp="{{ file.timestamp }}" 
+                         data-size="{{ file.size }}" 
+                         data-type="{{ file.type }}">
+                         
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
                                 <span style="font-weight: 600; display:block;">📄 {{ file.name }}</span>
-                                <span style="font-size:10px; opacity:0.5;">{{ file.time }}</span>
+                                <div class="file-meta">
+                                    <span class="meta-tag">{{ file.type }}</span>
+                                    <span class="meta-tag">{{ file.size_str }}</span>
+                                    <span>{{ file.time }}</span>
+                                </div>
                             </div>
                             <div style="display: flex; gap: 10px; align-items: center;">
                                 <a href="{{ url_for('download_file', filename=file.name, type='txt') }}" style="text-decoration: none; font-size: 12px; color: #00ffff; font-weight: 800;">TXT</a>
@@ -510,7 +606,7 @@
                                 <button onclick="confirmDelete('{{ file.name }}', 'file-{{ loop.index }}')" style="background:none; border:none; color:#ff3c3c; cursor:pointer; font-weight:800; font-size:12px;">DELETE</button>
                             </div>
                         </div>
-                        <audio controls>
+                        <audio controls style="margin-top: 15px;">
                             <source src="{{ url_for('serve_audio', filename=file.name) }}" type="audio/mpeg">
                         </audio>
                     </div>
@@ -532,6 +628,8 @@
         let currentDisplayTranscript = "";
         let currentFilename = "";
         let loginType = 'email'; // 'email' | 'phone'
+        const botBubble = document.getElementById('bot-bubble');
+        let botTimeout;
 
         const loadingMessages = [
             "Waking up the AI models...",
@@ -560,6 +658,9 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Initial Welcome
+            setTimeout(() => speak("Hi! I'm FlowBot. Upload an audio file to get started!"), 1000);
+
             document.querySelectorAll('.start-btn, .submit-btn').forEach(btn => {
                 btn.addEventListener('mouseenter', () => {
                     document.querySelectorAll('.bot-eye').forEach(e => { e.classList.add('star-mode'); e.style.transform='translate(0,0)'; });
@@ -569,6 +670,18 @@
                 });
             });
         });
+
+        // ============================================================
+        // BOT SPEECH FUNCTION
+        // ============================================================
+        function speak(text, duration=4000) {
+            clearTimeout(botTimeout);
+            botBubble.textContent = text;
+            botBubble.classList.add('show');
+            if(duration > 0) {
+                botTimeout = setTimeout(() => botBubble.classList.remove('show'), duration);
+            }
+        }
 
         // ============================================================
         // MODAL HELPERS
@@ -668,6 +781,7 @@
                 document.getElementById('user-greeting').innerText   = "HI, " + name;
                 document.getElementById('user-greeting').style.display = 'block';
                 document.getElementById('logout-btn').style.display    = 'flex';
+                speak("Welcome back, " + name + "!");
             }
         }
 
@@ -681,7 +795,6 @@
 
             errEl.textContent = '';
 
-            // Client-side quick checks
             if (!name || !email || !password) { errEl.textContent = 'Name, email and password are required.'; return; }
 
             const hasLen     = password.length >= 8;
@@ -704,6 +817,7 @@
                 if (data.message) {
                     launchToast("Account created! Please log in.");
                     toggleAuthMode('login');
+                    speak("Nice to meet you! Please log in.");
                 } else {
                     errEl.textContent = data.detail || "Registration failed.";
                 }
@@ -735,6 +849,7 @@
                     checkLoginStatus();
                 } else {
                     errEl.textContent = data.detail || "Login failed.";
+                    speak("Hmm, those credentials don't look right.");
                 }
             })
             .catch(() => { errEl.textContent = "Network error. Please try again."; });
@@ -763,6 +878,7 @@
                 if (data.message) {
                     succEl.textContent = data.message;
                     document.getElementById('forgot-email').value = '';
+                    speak("I've sent a rescue link to your email!");
                 } else {
                     errEl.textContent = data.detail || "Something went wrong.";
                 }
@@ -843,6 +959,39 @@
             }
         }
 
+        // --- NEW: JS SORTING FUNCTION ---
+        function sortFiles() {
+            const container = document.getElementById('file-list-root');
+            const sortBy = document.getElementById('sort-filter').value;
+            const items = Array.from(container.getElementsByClassName('file-item'));
+
+            if(items.length < 2) return;
+
+            items.sort((a, b) => {
+                const timeA = parseFloat(a.getAttribute('data-timestamp'));
+                const timeB = parseFloat(b.getAttribute('data-timestamp'));
+                const sizeA = parseFloat(a.getAttribute('data-size'));
+                const sizeB = parseFloat(b.getAttribute('data-size'));
+                const typeA = a.getAttribute('data-type');
+                const typeB = b.getAttribute('data-type');
+
+                switch(sortBy) {
+                    case 'newest':
+                        return timeB - timeA;
+                    case 'oldest':
+                        return timeA - timeB;
+                    case 'size-desc':
+                        return sizeB - sizeA;
+                    case 'size-asc':
+                        return sizeA - sizeB;
+                    case 'type':
+                        return typeA.localeCompare(typeB);
+                }
+            });
+
+            items.forEach(item => container.appendChild(item));
+        }
+
         window.enterApp = function() {
             const landingView = document.getElementById('landing-view');
             const appView     = document.getElementById('app-view');
@@ -864,6 +1013,11 @@
             const nameDisplay = document.getElementById('file-name-display');
             const audioPreview = document.getElementById('audio-live-preview');
             const submitBtn   = document.getElementById('submit-btn');
+            
+            // Bot Interaction: Drag Events
+            const dropZone = document.querySelector('.drop-zone');
+            dropZone.ondragover = () => speak("Ooh, a file! Feed me!", 0);
+            dropZone.ondragleave = () => speak("Waiting for audio...", 3000);
 
             input.onchange = (e) => {
                 const file = e.target.files[0];
@@ -873,6 +1027,7 @@
                     document.getElementById('preview-container').style.display = "block";
                     document.getElementById('text-wrap').style.display = "none";
                     document.getElementById('icon').innerHTML = "✅";
+                    speak("Looks like a good file! Click 'Transcribe Now'.");
                 }
             };
 
@@ -884,6 +1039,7 @@
                 const hasUsedFree = localStorage.getItem('free_trial_used');
 
                 if (!token && hasUsedFree) {
+                    speak("Free trial ended! Create an account to continue.");
                     Swal.fire({
                         title: 'Free Trial Ended',
                         text: 'You have used your free transcription. Please Sign Up or Login to continue!',
@@ -895,30 +1051,64 @@
 
                 submitBtn.disabled = true;
                 submitBtn.innerText = "Uploading...";
+                speak("Uploading to secure vault...");
 
                 const formData = new FormData(uploadForm);
                 const headers  = {};
                 if (token) headers['Authorization'] = 'Bearer ' + token;
 
                 fetch('/upload', { method: 'POST', body: formData, headers })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.filename) {
+                .then(async res => {
+                    const data = await res.json();
+                    
+                    // --- HANDLE FREE TRIAL REJECTION ---
+                    if (res.status === 403 && data.error === 'FREE_TRIAL_ENDED') {
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = "Transcribe Now";
+                        speak("Access denied. Please sign up!");
+                        
+                        Swal.fire({
+                            title: 'Free Trial Ended',
+                            text: data.message,
+                            icon: 'info',
+                            confirmButtonText: 'Create Free Account',
+                            confirmButtonColor: '#00ffff',
+                            background: '#1a1a1a',
+                            color: '#fff'
+                        }).then(() => {
+                            openAuth('register'); // Open Sign Up Modal
+                        });
+                        return; // Stop execution
+                    }
+                    // ----------------------------------------
+
+                    if (res.ok && data.filename) {
                         if (!token) localStorage.setItem('free_trial_used', 'true');
+                        
                         launchToast("UPLOAD SUCCESSFUL");
+                        speak("File received! Processing now...");
                         document.getElementById('progress-container').style.display = 'block';
                         currentFilename = data.filename;
                         pollStatus(data.filename);
                     } else {
-                        Swal.fire({ icon:'error', title:'Upload Error', text: data.error||"Unknown Error", background:'#1a1a1a', color:'#fff' });
+                        Swal.fire({ 
+                            icon: 'error', 
+                            title: 'Upload Error', 
+                            text: data.error || "Unknown Error", 
+                            background: '#1a1a1a', 
+                            color: '#fff' 
+                        });
                         submitBtn.disabled = false;
                         submitBtn.innerText = "Transcribe Now";
+                        speak("Oops! Something went wrong with the upload.");
                     }
                 })
                 .catch(err => {
                     console.error(err);
                     submitBtn.disabled = false;
                     submitBtn.innerText = "Transcribe Now";
+                    launchToast("Connection Failed", "delete");
+                    speak("Having trouble? Check your internet connection.");
                 });
             };
         };
@@ -946,6 +1136,7 @@
                         document.getElementById('submit-btn').disabled = false;
                         document.getElementById('submit-btn').innerText = "Transcribe Now";
                         document.getElementById('progress-container').style.display = 'none';
+                        speak("I failed to process that file. I'm sorry.");
                     }
 
                     if (data.status === 'completed') {
@@ -958,6 +1149,7 @@
                         document.getElementById('progress-container').style.display = 'none';
                         document.getElementById('submit-btn').innerText = "Transcribe Now";
                         document.getElementById('submit-btn').disabled  = false;
+                        speak("All done! Here is your report.");
                     }
                 })
                 .catch(err => console.error("Polling error:", err));
@@ -977,6 +1169,7 @@
 
             translateBtn.innerText  = "Translating...";
             translateBtn.disabled   = true;
+            speak("Translating to " + targetLang.toUpperCase() + "...");
 
             fetch('/translate_on_fly', {
                 method: 'POST',
@@ -990,6 +1183,7 @@
                     document.getElementById('current-download-txt').href = `/download/${encodeURIComponent(currentFilename)}?type=txt&lang=${targetLang}`;
                     document.getElementById('current-download-pdf').href = `/download/${encodeURIComponent(currentFilename)}?type=pdf&lang=${targetLang}`;
                     launchToast("Language Updated!");
+                    speak("Translation complete!");
                 }
                 translateBtn.innerText = "Update Language";
                 translateBtn.disabled  = false;
