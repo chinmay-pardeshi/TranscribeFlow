@@ -1,34 +1,28 @@
-from dotenv import load_dotenv
-load_dotenv()
+from flask import Flask, session
+from config import Config
+from auth.routes import auth_bp
+from transcription.routes import transcription_bp
 import os
-import time
-import threading
-import io
-import random
-import datetime
-import uuid
-import jwt
-import json
-import secrets
-import re
-from flask import Flask, render_template, request, jsonify, send_from_directory, Response
-from werkzeug.utils import secure_filename
-import whisper
-from deep_translator import GoogleTranslator
-from fpdf import FPDF
-import arabic_reshaper
-from bidi.algorithm import get_display
-from passlib.context import CryptContext
-from transformers import BartForConditionalGeneration, BartTokenizer
 
-# --- EMAIL IMPORTS (for password reset) ---
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+# Ensure upload folder exists
+if not os.path.exists(Config.UPLOAD_FOLDER):
+    os.makedirs(Config.UPLOAD_FOLDER)
 
 app = Flask(__name__)
-app.secret_key = "transcribe_flow_secret_key"
+app.config.from_object(Config)
 
+<<<<<<< HEAD
+app.secret_key = Config.SECRET_KEY
+app.config['UPLOAD_FOLDER'] = Config.UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = Config.MAX_CONTENT_LENGTH
+
+# Register blueprints
+app.register_blueprint(auth_bp)
+app.register_blueprint(transcription_bp)
+
+if __name__ == "__main__":
+    app.run(debug=False, threaded=True)
+=======
 # ============================================================
 # EMAIL CONFIGURATION (for password reset)
 # ============================================================
@@ -662,3 +656,4 @@ def clear_all():
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
+>>>>>>> upstream/main
