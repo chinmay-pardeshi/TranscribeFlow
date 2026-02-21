@@ -1,3 +1,4 @@
+# this is the backend
 from dotenv import load_dotenv
 load_dotenv()
 import sys
@@ -22,7 +23,6 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 from passlib.context import CryptContext
 from transformers import BartForConditionalGeneration, BartTokenizer
-
 
 # --- EMAIL IMPORTS ---
 import smtplib
@@ -530,7 +530,7 @@ def google_callback():
 
     # Verify ID token
     id_info = id_token.verify_oauth2_token(
-        credentials.id_token, request_session, GOOGLE_CLIENT_ID
+        credentials.id_token, request_session, GOOGLE_CLIENT_ID, clock_skew_in_seconds=10
     )
 
     email = id_info.get('email')
@@ -628,7 +628,7 @@ def reset_password():
 
 
 # ============================================================
-# TRANSCRIPTION & APP FUNCTIONALITY (unchanged)
+# TRANSCRIPTION & APP FUNCTIONALITY
 # ============================================================
 
 def allowed_file(filename):
@@ -715,7 +715,34 @@ def index():
         for f in os.listdir(UPLOAD_FOLDER):
             if allowed_file(f):
                 path = os.path.join(UPLOAD_FOLDER, f)
-                files.append({'name': f, 'time': time.ctime(os.path.getctime(path))})
+                
+                # Get the actual size in bytes
+                file_size_bytes = os.path.getsize(path)
+                
+                # Format size for display (MB or KB)
+                if file_size_bytes >= 1024 * 1024:
+                    size_str = f"{file_size_bytes / (1024 * 1024):.1f} MB"
+                else:
+                    size_str = f"{file_size_bytes / 1024:.1f} KB"
+                
+                # Get file extension type (mp3, wav, etc.)
+                file_type = f.rsplit('.', 1)[1].upper() if '.' in f else 'UNKNOWN'
+                
+                # Use getmtime (modification time) instead of getctime
+                raw_time = os.path.getmtime(path)
+                
+                files.append({
+                    'name': f, 
+                    'time': time.ctime(raw_time),
+                    'timestamp': raw_time,
+                    'size': file_size_bytes,
+                    'size_str': size_str,
+                    'type': file_type
+                })
+    
+    # Sort descending based on timestamp (newest first)
+    files.sort(key=lambda x: x['timestamp'], reverse=True)
+    
     return render_template('index.html', files=files)
 
 @app.route('/upload', methods=['POST'])
