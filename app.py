@@ -22,7 +22,10 @@ from fpdf import FPDF
 import arabic_reshaper
 from bidi.algorithm import get_display
 from passlib.context import CryptContext
-from transformers import BartForConditionalGeneration, BartTokenizer
+
+# --- ADDED TORCH AND UPDATED TRANSFORMERS IMPORTS ---
+import torch
+from transformers import BartForConditionalGeneration, BartTokenizer, AutoTokenizer, AutoModelForCausalLM
 
 # --- EMAIL IMPORTS ---
 import smtplib
@@ -123,6 +126,31 @@ try:
     print("BART Model Loaded Successfully.")
 except Exception as e:
     print(f"WARNING: Could not load BART model. Details: {e}")
+
+# --- 5️⃣ Chatbot Model Loader (TinyLlama) ---
+_bot_model = None
+_bot_tokenizer = None
+
+def get_bot_model():
+    """
+    Loads TinyLlama chatbot model (only once).
+    """
+    global _bot_model, _bot_tokenizer
+
+    if _bot_model is None or _bot_tokenizer is None:
+        print("Loading TinyLlama Assistant Model (This might take a minute the first time)...")
+        try:
+            model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+            _bot_tokenizer = AutoTokenizer.from_pretrained(model_name)
+            _bot_model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=torch.float32
+            )
+            print("TinyLlama Model Loaded Successfully.")
+        except Exception as e:
+            print(f"ERROR: Could not load TinyLlama model. Details: {e}")
+
+    return _bot_model, _bot_tokenizer
 
 # ============================================================
 # USER CLASS
@@ -528,7 +556,7 @@ def google_callback():
     credentials = flow.credentials
     request_session = google_requests.Request()
 
-    # Verify ID token
+    # Verify ID token (clock_skew_in_seconds correctly added here)
     id_info = id_token.verify_oauth2_token(
         credentials.id_token, request_session, GOOGLE_CLIENT_ID, clock_skew_in_seconds=10
     )
@@ -902,6 +930,56 @@ def clear_all():
             except Exception:
                 pass
     return index()
+
+# ============================================================
+# CHATBOT ROUTE
+# ============================================================
+@app.route('/chat', methods=['POST'])
+def chat_with_bot():
+    data = request.get_json()
+    user_message = data.get('message', '')
+    transcript_context = data.get('context', '') # Allows the frontend to pass the transcript
+
+    if not user_message:
+        return jsonify({"error": "Message cannot be empty"}), 400
+
+    # 1. Load the model using your friend's function
+    model, tokenizer = get_bot_model()
+    if not model or not tokenizer:
+        return jsonify({"error": "Chatbot is currently offline."}), 500
+
+    # 2. Setup the prompt using TinyLlama's required formatting
+    system_prompt = "You are a helpful AI assistant named FlowBot. You help answer questions clearly and concisely."
+    
+    # If the user is looking at a transcript, let the bot read it!
+    if transcript_context:
+        # Limit to 1500 chars so we don't overwhelm the model's memory limits
+        system_prompt += f"\n\nHere is the current audio transcript for context:\n{transcript_context[:1500]}"
+
+    prompt = f"<|system|>\n{system_prompt}</s>\n<|user|>\n{user_message}</s>\n<|assistant|>\n"
+
+    try:
+        # 3. Generate Response
+        inputs = tokenizer(prompt, return_tensors="pt")
+        outputs = model.generate(
+            **inputs, 
+            max_new_tokens=150,   # Maximum length of the bot's reply
+            temperature=0.7,      # Creativity (0.0 is robotic, 1.0 is crazy)
+            top_p=0.9,
+            do_sample=True
+        )
+        
+        # 4. Decode and clean up the output
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # TinyLlama outputs the whole prompt + response. We only want the assistant's part.
+        assistant_reply = response.split("<|assistant|>")[-1].strip()
+        
+        return jsonify({"response": assistant_reply})
+        
+    except Exception as e:
+        print(f"Chatbot Generation Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
