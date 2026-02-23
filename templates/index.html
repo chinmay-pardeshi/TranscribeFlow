@@ -91,6 +91,126 @@
         }
 
         /* ========================================================
+           CHAT UI STYLES (NEW)
+        ======================================================== */
+        .chat-window {
+            position: fixed;
+            bottom: 190px; /* Above the mascot */
+            right: 40px;
+            width: 350px;
+            height: 450px;
+            background: rgba(15, 15, 15, 0.95);
+            border: 1px solid #00ffff;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 255, 255, 0.2);
+            backdrop-filter: blur(15px);
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            z-index: 101;
+            overflow: hidden;
+            transform: translateY(20px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .chat-window.open {
+            display: flex;
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .chat-header {
+            background: rgba(0, 255, 255, 0.1);
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-header-title {
+            font-weight: 800;
+            font-size: 14px;
+            color: #00ffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chat-header-title::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #00ff88;
+        }
+        .chat-close-btn {
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            font-size: 18px;
+            transition: 0.3s;
+        }
+        .chat-close-btn:hover { color: #fff; transform: scale(1.1); }
+        .chat-body {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            scrollbar-width: thin;
+            scrollbar-color: #00ffff rgba(255, 255, 255, 0.05);
+        }
+        .chat-body::-webkit-scrollbar { width: 4px; }
+        .chat-body::-webkit-scrollbar-thumb { background: #00ffff; border-radius: 10px; }
+        
+        .chat-msg { max-width: 85%; padding: 10px 15px; border-radius: 15px; font-size: 13px; line-height: 1.4; word-wrap: break-word; }
+        .chat-msg.bot { background: rgba(0, 255, 255, 0.1); color: #fff; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .chat-msg.user { background: #00ffff; color: #000; font-weight: 600; align-self: flex-end; border-bottom-right-radius: 2px; }
+        
+        .chat-input-area {
+            display: flex;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .chat-input {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 50px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 13px;
+            outline: none;
+        }
+        .chat-input:focus { border-color: #00ffff; background: rgba(0,255,255,0.05); }
+        .chat-send-btn {
+            background: #00ffff;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-left: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.3s;
+        }
+        .chat-send-btn:hover { background: #fff; transform: scale(1.05); box-shadow: 0 0 15px rgba(0,255,255,0.5); }
+        .chat-send-btn svg { width: 16px; height: 16px; fill: #000; }
+        
+        /* Typing Indicator */
+        .typing-indicator { display: none; align-items: center; gap: 4px; padding: 10px 15px; background: rgba(0, 255, 255, 0.05); border-radius: 15px; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .typing-dot { width: 6px; height: 6px; background: #00ffff; border-radius: 50%; animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+
+        /* ========================================================
            AUTH MODAL
         ======================================================== */
         .modal-overlay {
@@ -146,7 +266,6 @@
         .auth-btn:hover { transform: scale(1.02); box-shadow: 0 0 20px rgba(0, 255, 255, 0.4); }
         .auth-btn:disabled { background: #555; color: #888; cursor: not-allowed; transform: none; }
 
-        /* NEW: Google OAuth Button */
         .google-btn {
             width: 100%; padding: 14px; background: #fff; color: #333;
             border: 1px solid #ddd; border-radius: 12px; font-weight: 700; cursor: pointer;
@@ -247,7 +366,7 @@
             .section-title { font-size: 24px; }
         }
 
-        /* LANDING & APP (same as before - keeping your existing styles) */
+        /* LANDING & APP */
         #landing-view {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             min-height: 100vh; width: 100%; text-align: center; z-index: 5;
@@ -363,7 +482,7 @@
         </div>
     </header>
 
-    <div class="bot-container" onclick="openAuthModal()" title="Click to login">
+    <div class="bot-container" onclick="toggleChatWindow()" title="Chat with FlowBot">
         <div class="bot-body">
             <div class="bot-shine"></div>
             <div class="bot-screen">
@@ -374,11 +493,31 @@
         <div id="bot-bubble" class="bot-bubble"></div>
     </div>
 
-    <!-- AUTH MODAL -->
+    <div id="chat-window" class="chat-window">
+        <div class="chat-header">
+            <div class="chat-header-title">FlowBot AI</div>
+            <button class="chat-close-btn" onclick="toggleChatWindow(event)">✕</button>
+        </div>
+        <div class="chat-body" id="chat-body">
+            <div class="chat-msg bot">Hi! I'm FlowBot. How can I help you today? If you upload an audio file, you can ask me questions about the transcript!</div>
+            
+            <div class="typing-indicator" id="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Ask me anything..." onkeypress="handleChatEnter(event)">
+            <button class="chat-send-btn" onclick="sendChatMessage()">
+                <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+        </div>
+    </div>
+
     <div id="auth-modal" class="modal-overlay" onclick="handleModalBgClick(event)">
         <div class="auth-card" id="auth-card-inner">
 
-            <!-- LOGIN FORM -->
             <div id="login-form">
                 <h2 style="margin: 0 0 6px 0; font-family: 'Playfair Display', serif;">Welcome Back</h2>
                 <p style="margin:0 0 20px; font-size:13px; color:rgba(255,255,255,0.4);">Sign in to your account</p>
@@ -395,7 +534,6 @@
                 
                 <div class="auth-divider"><span>OR</span></div>
                 
-                <!-- GOOGLE LOGIN BUTTON -->
                 <button class="google-btn" onclick="googleLogin()">
                     <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google">
                     Continue with Google
@@ -404,7 +542,6 @@
                 <div class="toggle-text">No account? <span onclick="toggleAuthMode('register')">Create one free</span></div>
             </div>
 
-            <!-- REGISTER FORM - STEP 1: EMAIL VERIFICATION -->
             <div id="register-form" style="display:none;">
                 <h2 style="margin: 0 0 6px 0; font-family: 'Playfair Display', serif;">Join TranscribeFlow</h2>
                 <p style="margin:0 0 20px; font-size:13px; color:rgba(255,255,255,0.4);">Verify your email to create account</p>
@@ -414,7 +551,6 @@
                 <button class="auth-btn" id="reg-step1-btn" onclick="sendRegisterOTP()">Send Verification Code</button>
                 <div class="auth-divider"><span>OR</span></div>
                 
-                <!-- GOOGLE SIGNUP BUTTON -->
                 <button class="google-btn" onclick="googleLogin()">
                     <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google">
                     Sign up with Google
@@ -423,7 +559,6 @@
                 <div class="toggle-text">Already have an account? <span onclick="toggleAuthMode('login')">Log In</span></div>
             </div>
 
-            <!-- REGISTER FORM - STEP 2: COMPLETE REGISTRATION -->
             <div id="register-form-step2" style="display:none;">
                 <h2 style="margin: 0 0 6px 0; font-family: 'Playfair Display', serif;">Complete Registration</h2>
                 <p style="margin:0 0 20px; font-size:13px; color:rgba(255,255,255,0.4);">Enter OTP and create your account</p>
@@ -450,7 +585,6 @@
                 </div>
             </div>
 
-            <!-- FORGOT PASSWORD FORM -->
             <div id="forgot-form" style="display:none;">
                 <h2 style="margin: 0 0 6px 0; font-family: 'Playfair Display', serif;">Reset Password</h2>
                 <p style="margin:0 0 20px; font-size:13px; color:rgba(255,255,255,0.4);">Enter your registered email.</p>
@@ -463,7 +597,6 @@
                 </div>
             </div>
 
-            <!-- NEW: OTP REQUEST FORM -->
             <div id="otp-request-form" style="display:none;">
                 <h2 style="margin: 0 0 6px 0; font-family: 'Playfair Display', serif;">Login with OTP</h2>
                 <p style="margin:0 0 20px; font-size:13px; color:rgba(255,255,255,0.4);">We'll send a 6-digit code to your email.</p>
@@ -476,7 +609,6 @@
                 </div>
             </div>
 
-            <!-- NEW: OTP VERIFY FORM -->
             <div id="otp-verify-form" style="display:none;">
                 <h2 style="margin: 0 0 6px 0; font-family: 'Playfair Display', serif;">Enter OTP</h2>
                 <p style="margin:0 0 20px; font-size:13px; color:rgba(255,255,255,0.4);">Check your email for the 6-digit code.</p>
@@ -493,7 +625,6 @@
         </div>
     </div>
 
-    <!-- LANDING VIEW -->
     <section id="landing-view">
         <h1 class="landing-title">Audio to Insight<br>Instantly.</h1>
         <p style="opacity: 0.5; margin-bottom: 50px; max-width: 400px; line-height: 1.6;">Leverage professional-grade AI to transcribe and summarize your meetings, lectures, and voice notes.</p>
@@ -564,7 +695,6 @@
         <button class="start-btn" onclick="enterApp()">Start Transcribing</button>
     </section>
 
-    <!-- APP VIEW (keeping your existing structure) -->
     <main id="app-view">
         <div class="hero-section">
             <h1 class="hero-headline">Full Audio Analysis</h1>
@@ -700,9 +830,10 @@
         let currentDisplayTranscript = "";
         let currentFilename = "";
         let loginType = 'email';
-        let otpEmail = "";  // Store email when requesting OTP
+        let otpEmail = "";  
         const botBubble = document.getElementById('bot-bubble');
         let botTimeout;
+        let isChatOpen = false;
 
         const loadingMessages = [
             "Waking up the AI models...",
@@ -716,7 +847,7 @@
         ];
 
         // ══════════════════════════════════════════════════════════
-        // BOT TRACKING & ANIMATIONS
+        // BOT TRACKING & ANIMATIONS & CHAT
         // ══════════════════════════════════════════════════════════
         document.addEventListener('mousemove', (e) => {
             document.querySelectorAll('.bot-eye').forEach(eye => {
@@ -731,7 +862,7 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => speak("Hi! I'm FlowBot. Upload an audio file to get started!"), 1000);
+            setTimeout(() => speak("Hi! I'm FlowBot. Upload an audio file or click me to chat!"), 1000);
 
             document.querySelectorAll('.start-btn, .submit-btn').forEach(btn => {
                 btn.addEventListener('mouseenter', () => {
@@ -742,20 +873,15 @@
                 });
             });
 
-            // Check for Google OAuth redirect
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('google_login') === 'success') {
                 const token = urlParams.get('token');
                 const name = urlParams.get('name');
-                const user_id = urlParams.get('user_id');
-                
                 if (token && name) {
                     localStorage.setItem('access_token', token);
                     localStorage.setItem('user_name', name);
                     launchToast("Logged in with Google!");
                     checkLoginStatus();
-                    
-                    // Clean URL
                     window.history.replaceState({}, document.title, "/");
                 }
             }
@@ -770,13 +896,91 @@
             }
         }
 
+        // --- NEW: CHAT FUNCTIONS ---
+        function toggleChatWindow(event) {
+            if (event) event.stopPropagation();
+            const chatWindow = document.getElementById('chat-window');
+            isChatOpen = !isChatOpen;
+            
+            if (isChatOpen) {
+                chatWindow.classList.add('open');
+                document.getElementById('chat-input').focus();
+                botBubble.classList.remove('show'); // Hide small bubble when big chat is open
+            } else {
+                chatWindow.classList.remove('open');
+            }
+        }
+
+        function handleChatEnter(event) {
+            if (event.key === 'Enter') {
+                sendChatMessage();
+            }
+        }
+
+        function appendMessage(sender, text) {
+            const chatBody = document.getElementById('chat-body');
+            const typingIndicator = document.getElementById('typing-indicator');
+            
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('chat-msg', sender);
+            msgDiv.innerText = text;
+            
+            // Insert message before the typing indicator
+            chatBody.insertBefore(msgDiv, typingIndicator);
+            chatBody.scrollTop = chatBody.scrollHeight;
+        }
+
+        function sendChatMessage() {
+            const inputEl = document.getElementById('chat-input');
+            const message = inputEl.value.trim();
+            if (!message) return;
+
+            // 1. Display user message
+            appendMessage('user', message);
+            inputEl.value = '';
+            
+            // 2. Show typing indicator
+            const typingIndicator = document.getElementById('typing-indicator');
+            typingIndicator.style.display = 'flex';
+            document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
+
+            // 3. Send to backend
+            fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    message: message,
+                    context: masterTranscript // Pass the transcript so bot can read it!
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                typingIndicator.style.display = 'none';
+                if (data.error) {
+                    appendMessage('bot', "Error: " + data.error);
+                } else {
+                    appendMessage('bot', data.response);
+                }
+            })
+            .catch(err => {
+                typingIndicator.style.display = 'none';
+                appendMessage('bot', "Sorry, I couldn't connect to the server.");
+                console.error(err);
+            });
+        }
+
+
         // ══════════════════════════════════════════════════════════
         // AUTH MODAL CONTROLS
         // ══════════════════════════════════════════════════════════
         function openAuthModal() {
-            const modal = document.getElementById('auth-modal');
-            modal.style.display = 'flex';
-            setTimeout(() => { modal.style.opacity = '1'; document.getElementById('auth-card-inner').style.transform = 'scale(1)'; }, 10);
+            // Only open auth if chat isn't open and they click the bot
+            if(!isChatOpen && document.getElementById('user-greeting').style.display === 'none') {
+                const modal = document.getElementById('auth-modal');
+                modal.style.display = 'flex';
+                setTimeout(() => { modal.style.opacity = '1'; document.getElementById('auth-card-inner').style.transform = 'scale(1)'; }, 10);
+                toggleAuthMode('login');
+            }
         }
         function closeAuthModal() {
             const modal = document.getElementById('auth-modal');
@@ -787,7 +991,12 @@
         function handleModalBgClick(e) {
             if (e.target === document.getElementById('auth-modal')) closeAuthModal();
         }
-        function openAuth(mode) { openAuthModal(); toggleAuthMode(mode); }
+        function openAuth(mode) { 
+            const modal = document.getElementById('auth-modal');
+            modal.style.display = 'flex';
+            setTimeout(() => { modal.style.opacity = '1'; document.getElementById('auth-card-inner').style.transform = 'scale(1)'; }, 10);
+            toggleAuthMode(mode); 
+        }
 
         function toggleAuthMode(mode) {
             ['login-form', 'register-form', 'register-form-step2', 'forgot-form', 'otp-request-form', 'otp-verify-form'].forEach(id => {
@@ -797,7 +1006,6 @@
             if (mode === 'login') document.getElementById('login-form').style.display = 'block';
             if (mode === 'register') {
                 document.getElementById('register-form').style.display = 'block';
-                // Reset step 1 form
                 document.getElementById('reg-email-step1').value = '';
                 document.getElementById('reg-step1-error').textContent = '';
                 document.getElementById('reg-step1-success').textContent = '';
@@ -858,9 +1066,9 @@
             const score = [hasLen, hasUpper, hasSpecial].filter(Boolean).length;
             const configs = {
                 0: { w: '0%',   bg: 'transparent', label: 'Enter a password' },
-                1: { w: '33%',  bg: '#ff4444',      label: 'Weak' },
-                2: { w: '66%',  bg: '#ffaa00',      label: 'Fair' },
-                3: { w: '100%', bg: '#00ffcc',      label: 'Strong ✓' },
+                1: { w: '33%',  bg: '#ff4444',     label: 'Weak' },
+                2: { w: '66%',  bg: '#ffaa00',     label: 'Fair' },
+                3: { w: '100%', bg: '#00ffcc',     label: 'Strong ✓' },
             };
             const cfg = configs[score];
             fill.style.width      = cfg.w;
@@ -885,10 +1093,7 @@
             }
         }
 
-        // ══════════════════════════════════════════════════════════
-        // REGISTRATION FUNCTIONS (TWO-STEP WITH EMAIL VERIFICATION)
-        // ══════════════════════════════════════════════════════════
-        let registrationEmail = "";  // Store email during registration flow
+        let registrationEmail = ""; 
 
         function sendRegisterOTP() {
             const email = document.getElementById('reg-email-step1').value.trim();
@@ -904,7 +1109,6 @@
                 return; 
             }
 
-            // Basic email validation
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(email)) {
                 errEl.textContent = 'Please enter a valid email address.';
@@ -926,7 +1130,6 @@
                     registrationEmail = email.toLowerCase();
                     speak("Check your email for the verification code!");
                     
-                    // Move to step 2 after 2 seconds
                     setTimeout(() => {
                         toggleAuthMode('register-step2');
                         document.getElementById('reg-email-step2').value = registrationEmail;
@@ -943,7 +1146,7 @@
         function registerUser() {
             const otp      = document.getElementById('reg-otp').value.trim();
             const name     = document.getElementById('reg-name').value.trim();
-            const email    = registrationEmail;  // Use stored email from step 1
+            const email    = registrationEmail;
             const phone    = document.getElementById('reg-phone').value.trim();
             const password = document.getElementById('reg-password').value;
             const errEl    = document.getElementById('reg-error');
@@ -984,7 +1187,6 @@
                     toggleAuthMode('login');
                     speak("Nice to meet you! Please log in.");
                     
-                    // Reset registration form
                     registrationEmail = "";
                     document.getElementById('reg-otp').value = '';
                     document.getElementById('reg-name').value = '';
@@ -1029,9 +1231,6 @@
             .catch(() => { errEl.textContent = "Network error. Please try again."; });
         }
 
-        // ══════════════════════════════════════════════════════════
-        // NEW: OTP FUNCTIONS
-        // ══════════════════════════════════════════════════════════
         function requestOTP() {
             const email = document.getElementById('otp-email').value.trim();
             const errEl = document.getElementById('otp-request-error');
@@ -1055,7 +1254,7 @@
             .then(data => {
                 if (data.message) {
                     succEl.textContent = data.message + " Please check your inbox.";
-                    otpEmail = email;  // Store email for verification
+                    otpEmail = email;  
                     speak("OTP sent! Check your email.");
                     setTimeout(() => toggleAuthMode('otp-verify'), 2000);
                 } else {
@@ -1104,9 +1303,6 @@
             .finally(() => { btn.disabled = false; btn.textContent = 'Verify & Login'; });
         }
 
-        // ══════════════════════════════════════════════════════════
-        // NEW: GOOGLE OAUTH
-        // ══════════════════════════════════════════════════════════
         function googleLogin() {
             window.location.href = '/auth/google/login';
         }
@@ -1150,7 +1346,7 @@
         }
 
         // ══════════════════════════════════════════════════════════
-        // APP FUNCTIONALITY (unchanged from your original)
+        // APP FUNCTIONALITY
         // ══════════════════════════════════════════════════════════
         function confirmPurge() {
             Swal.fire({
