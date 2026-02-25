@@ -1,4 +1,3 @@
-# this is the backend
 from dotenv import load_dotenv
 load_dotenv()
 import sys
@@ -14,6 +13,7 @@ import jwt
 import json
 import secrets
 import re
+from functools import wraps
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, redirect, url_for, session
 from werkzeug.utils import secure_filename
 import whisper
@@ -23,9 +23,12 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 from passlib.context import CryptContext
 
-# --- ADDED TORCH AND UPDATED TRANSFORMERS IMPORTS ---
+# --- TORCH AND TRANSFORMERS IMPORTS (For BART Summarization) ---
 import torch
-from transformers import BartForConditionalGeneration, BartTokenizer, AutoTokenizer, AutoModelForCausalLM
+from transformers import BartForConditionalGeneration, BartTokenizer
+
+# --- GROQ API IMPORT (Replaces TinyLlama) ---
+from groq import Groq
 
 # --- EMAIL IMPORTS ---
 import smtplib
@@ -39,6 +42,12 @@ from google_auth_oauthlib.flow import Flow
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "transcribe_flow_secret_key_change_in_production")
+
+# ============================================================
+# GROQ CONFIGURATION
+# ============================================================
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # ============================================================
 # EMAIL CONFIGURATION
@@ -78,7 +87,7 @@ def load_users():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, 'r') as f:
-                return json.load(f)            # Read and convert JSON to Python dict
+                return json.load(f)            
         except Exception as e:
             print(f"Error loading database: {e}")
             return {}
@@ -87,7 +96,7 @@ def load_users():
 def save_users():
     try:
         with open(DB_FILE, 'w') as f:
-            json.dump(users_db, f, indent=4)       # Convert Python dict to JSON and save
+            json.dump(users_db, f, indent=4)       
     except Exception as e:
         print(f"Error saving database: {e}")
 
@@ -126,31 +135,6 @@ try:
     print("BART Model Loaded Successfully.")
 except Exception as e:
     print(f"WARNING: Could not load BART model. Details: {e}")
-
-# --- 5️⃣ Chatbot Model Loader (TinyLlama) ---
-_bot_model = None
-_bot_tokenizer = None
-
-def get_bot_model():
-    """
-    Loads TinyLlama chatbot model (only once).
-    """
-    global _bot_model, _bot_tokenizer
-
-    if _bot_model is None or _bot_tokenizer is None:
-        print("Loading TinyLlama Assistant Model (This might take a minute the first time)...")
-        try:
-            model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-            _bot_tokenizer = AutoTokenizer.from_pretrained(model_name)
-            _bot_model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_dtype=torch.float32
-            )
-            print("TinyLlama Model Loaded Successfully.")
-        except Exception as e:
-            print(f"ERROR: Could not load TinyLlama model. Details: {e}")
-
-    return _bot_model, _bot_tokenizer
 
 # ============================================================
 # USER CLASS
@@ -211,6 +195,29 @@ def find_user(identifier: str):
             return email_key, record
     return None, None
 
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if "Authorization" in request.headers:
+            auth_header = request.headers["Authorization"]
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+        
+        if not token:
+            return jsonify({"detail": "Token is missing!"}), 401
+        
+        try:
+            data = jwt.decode(token, app.secret_key, algorithms=[ALGORITHM])
+            current_user = users_db.get(data["sub"])
+            if not current_user:
+                return jsonify({"detail": "User not found!"}), 401
+        except Exception as e:
+            return jsonify({"detail": "Token is invalid or expired!"}), 401
+            
+        return f(current_user, *args, **kwargs)
+    return decorated
+
 # ============================================================
 # EMAIL SENDING FUNCTIONS
 # ============================================================
@@ -258,7 +265,6 @@ If you did not request this, please ignore this email.
         print(f"Email send error: {e}")
         return False
 
-# --- NEW: Send OTP Email ---
 def send_otp_email(to_email: str, otp: str) -> bool:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "TranscribeFlow – Your Login OTP"
@@ -301,10 +307,9 @@ This code is valid for 5 minutes. Do not share it with anyone.
         return False
 
 # ============================================================
-# AUTH ROUTES (EXISTING + NEW)
+# AUTH ROUTES
 # ============================================================
 
-# --- STEP 1: REQUEST REGISTRATION OTP ---
 @app.route('/auth/register/request_otp', methods=['POST'])
 def register_request_otp():
     """Send OTP to email before allowing registration"""
@@ -315,16 +320,14 @@ def register_request_otp():
 
     email = data['email'].strip().lower()
 
-    # Check if email already exists
     if email in users_db:
         return jsonify({"detail": "This email is already registered. Please login instead."}), 400
 
-    # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
     otp_store[email] = {
         "otp": otp,
         "expires": datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
-        "verified": False  # Track verification status
+        "verified": False  
     }
 
     sent = send_otp_email(email, otp)
@@ -335,8 +338,6 @@ def register_request_otp():
 
     return jsonify({"message": "OTP sent to your email. Please verify to continue registration."})
 
-
-# --- STEP 2: VERIFY EMAIL & COMPLETE REGISTRATION ---
 @app.route('/auth/register', methods=['POST'])
 def register():
     """Complete registration after OTP verification"""
@@ -351,7 +352,6 @@ def register():
     phone    = normalise_phone(data.get('phone', ''))
     otp      = data['otp'].strip()
 
-    # Verify OTP first
     otp_data = otp_store.get(email)
     
     if not otp_data:
@@ -364,7 +364,6 @@ def register():
     if otp_data['otp'] != otp:
         return jsonify({"detail": "Incorrect OTP. Please try again."}), 401
 
-    # OTP verified - proceed with registration
     is_valid, err_msg = validate_password(password)
     if not is_valid:
         return jsonify({"detail": err_msg}), 400
@@ -384,7 +383,6 @@ def register():
     users_db[email] = user_details
     save_users()
 
-    # Clear OTP after successful registration
     otp_store.pop(email, None)
 
     return jsonify({
@@ -398,8 +396,6 @@ def register():
         }
     })
 
-
-# --- LOGIN (email/phone + password) ---
 @app.route('/auth/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -415,7 +411,6 @@ def login():
     if not user_record or not verify_password(password, user_record['password_hash']):
         return jsonify({"detail": "Invalid credentials"}), 401
 
-    # Check if user has email (important for phone-only users from old system)
     if not user_record.get('email'):
         return jsonify({
             "detail": "Your account needs to be updated with an email address. Please contact support."
@@ -427,8 +422,6 @@ def login():
         "name":         user_record['name']
     })
 
-
-# --- NEW: REQUEST OTP (Send 6-digit OTP to email) ---
 @app.route('/auth/request_otp', methods=['POST'])
 def request_otp():
     data = request.get_json()
@@ -439,10 +432,8 @@ def request_otp():
     email = data['email'].strip().lower()
 
     if email not in users_db:
-        # Prevent user enumeration
         return jsonify({"message": "If that email is registered, an OTP has been sent."})
 
-    # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
     otp_store[email] = {
         "otp": otp,
@@ -457,8 +448,6 @@ def request_otp():
 
     return jsonify({"message": "If that email is registered, an OTP has been sent."})
 
-
-# --- NEW: VERIFY OTP (Login with OTP) ---
 @app.route('/auth/verify_otp', methods=['POST'])
 def verify_otp():
     data = request.get_json()
@@ -481,7 +470,6 @@ def verify_otp():
     if otp_data['otp'] != otp:
         return jsonify({"detail": "Incorrect OTP."}), 401
 
-    # OTP verified - clear it and log user in
     otp_store.pop(email, None)
 
     if email not in users_db:
@@ -495,8 +483,6 @@ def verify_otp():
         "name":         user_record['name']
     })
 
-
-# --- NEW: GOOGLE OAUTH LOGIN (Step 1: Redirect to Google) ---
 @app.route('/auth/google/login')
 def google_login():
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
@@ -525,8 +511,6 @@ def google_login():
     session['state'] = state
     return redirect(authorization_url)
 
-
-# --- NEW: GOOGLE OAUTH CALLBACK (Step 2: Handle Google response) ---
 @app.route('/auth/google/callback')
 def google_callback():
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
@@ -550,13 +534,11 @@ def google_callback():
     )
     flow.redirect_uri = GOOGLE_REDIRECT_URI
 
-    # Fetch token
     flow.fetch_token(authorization_response=request.url)
 
     credentials = flow.credentials
     request_session = google_requests.Request()
 
-    # Verify ID token (clock_skew_in_seconds correctly added here)
     id_info = id_token.verify_oauth2_token(
         credentials.id_token, request_session, GOOGLE_CLIENT_ID, clock_skew_in_seconds=10
     )
@@ -569,24 +551,18 @@ def google_callback():
 
     email = email.lower()
 
-    # Check if user exists, if not create account
     if email not in users_db:
         new_user_obj = User(name, email, phone="")
         user_details = new_user_obj.register()
-        user_details['password_hash'] = ""  # No password for OAuth users
+        user_details['password_hash'] = ""  
         users_db[email] = user_details
         save_users()
 
     user_record = users_db[email]
-
-    # Create JWT token
     token = create_token(email)
 
-    # Redirect to frontend with token in URL (frontend will store it)
     return redirect(f"/?google_login=success&token={token}&name={user_record['name']}&user_id={user_record['user_id']}")
 
-
-# --- FORGOT PASSWORD ---
 @app.route('/auth/forgot_password', methods=['POST'])
 def forgot_password():
     data = request.get_json()
@@ -613,15 +589,11 @@ def forgot_password():
 
     return jsonify({"message": "If that email is registered, a reset link has been sent."})
 
-
-# --- RESET PASSWORD PAGE ---
 @app.route('/auth/reset_password_page', methods=['GET'])
 def reset_password_page():
     token = request.args.get('token', '')
     return render_template('reset_password.html', token=token)
 
-
-# --- RESET PASSWORD ---
 @app.route('/auth/reset_password', methods=['POST'])
 def reset_password():
     data = request.get_json()
@@ -744,19 +716,15 @@ def index():
             if allowed_file(f):
                 path = os.path.join(UPLOAD_FOLDER, f)
                 
-                # Get the actual size in bytes
                 file_size_bytes = os.path.getsize(path)
                 
-                # Format size for display (MB or KB)
                 if file_size_bytes >= 1024 * 1024:
                     size_str = f"{file_size_bytes / (1024 * 1024):.1f} MB"
                 else:
                     size_str = f"{file_size_bytes / 1024:.1f} KB"
                 
-                # Get file extension type (mp3, wav, etc.)
                 file_type = f.rsplit('.', 1)[1].upper() if '.' in f else 'UNKNOWN'
                 
-                # Use getmtime (modification time) instead of getctime
                 raw_time = os.path.getmtime(path)
                 
                 files.append({
@@ -768,7 +736,6 @@ def index():
                     'type': file_type
                 })
     
-    # Sort descending based on timestamp (newest first)
     files.sort(key=lambda x: x['timestamp'], reverse=True)
     
     return render_template('index.html', files=files)
@@ -857,13 +824,16 @@ def download_file(filename):
             }
             desired_font = font_map.get(target_lang, 'NotoSans-Regular.ttf')
 
+            # --- NEW: Font Existence Check with Terminal Warnings ---
             if os.path.exists(desired_font):
                 pdf.add_font("CustomFont", style="", fname=desired_font)
                 family = "CustomFont"
             elif os.path.exists('NotoSans-Regular.ttf'):
+                print(f"WARNING: Missing {desired_font}. Falling back to English NotoSans.")
                 pdf.add_font("CustomFont", style="", fname='NotoSans-Regular.ttf')
                 family = "CustomFont"
             else:
+                print(f"CRITICAL WARNING: Missing all custom fonts. Falling back to Arial. Translations WILL be garbled.")
                 family = "Arial"
 
             pdf.add_page()
@@ -932,54 +902,101 @@ def clear_all():
     return index()
 
 # ============================================================
-# CHATBOT ROUTE
+# CHATBOT ROUTE (Powered by Groq)
 # ============================================================
+
 @app.route('/chat', methods=['POST'])
-def chat_with_bot():
+@token_required
+def chat_with_bot(current_user): 
     data = request.get_json()
-    user_message = data.get('message', '')
-    transcript_context = data.get('context', '') # Allows the frontend to pass the transcript
+    user_message = data.get('message', '').strip()
+    transcript_context = data.get('context', '') 
 
     if not user_message:
-        return jsonify({"error": "Message cannot be empty"}), 400
+        return jsonify({"reply": "Message cannot be empty"}), 400
 
-    # 1. Load the model using your friend's function
-    model, tokenizer = get_bot_model()
-    if not model or not tokenizer:
-        return jsonify({"error": "Chatbot is currently offline."}), 500
+    if not groq_client:
+        return jsonify({"reply": "Groq API key is missing. The Chatbot is currently offline."}), 500
 
-    # 2. Setup the prompt using TinyLlama's required formatting
-    system_prompt = "You are a helpful AI assistant named FlowBot. You help answer questions clearly and concisely."
+    # ---------- Website Knowledge ----------
+    website_knowledge = """
+TranscribeFlow is an AI audio transcription web app.
+
+Features & Workflows:
+- Supported Formats: ONLY local MP3 and WAV files (Max 50MB).
+- Upload Process: Users must drag & drop or click the "Select Audio" pod in the main dashboard, then click "Transcribe Now".
+- Cloud Integrations: None. We do NOT support YouTube, Tubi, Spotify, Google Drive, or Dropbox. Local files only.
+- Free users: trial access managed via IP.
+- Generates timestamped transcription using Whisper.
+- Generates AI summary using BART.
+- Supports dynamic translation via GoogleTranslator.
+- Export as TXT or Multilingual PDF (with custom fonts & Arabic text reshaping).
+- Secure JWT authentication & Argon2 hashing.
+"""
     
-    # If the user is looking at a transcript, let the bot read it!
-    if transcript_context:
-        # Limit to 1500 chars so we don't overwhelm the model's memory limits
-        system_prompt += f"\n\nHere is the current audio transcript for context:\n{transcript_context[:1500]}"
+    # ---------- Conversation Memory ----------
+    history = session.get("bot_history", [])
 
-    prompt = f"<|system|>\n{system_prompt}</s>\n<|user|>\n{user_message}</s>\n<|assistant|>\n"
+    history.append({
+        "role": "user",
+        "content": user_message
+    })
+
+    # Keep only the last 5 messages for context
+    history = history[-5:]
+    session["bot_history"] = history
+
+    # ---------- Prompt Building ----------
+    system_prompt = f"""You are FlowBot, the AI assistant for TranscribeFlow.
+
+Rules:
+- Be friendly, helpful, and conversational.
+- Answer general questions naturally, but prioritize helping with TranscribeFlow.
+- STRICT RULE: NEVER invent features, cloud integrations, or supported platforms that are not listed in the Website Information.
+- If a user has upload trouble, tell them to ensure it is an MP3 or WAV file and to click the 'Select Audio' pod.
+- Keep responses concise (under 6 lines if possible).
+- Use bullet points if helpful.
+- Always end your response with:
+
+Best regards,
+FlowBot
+transcribeflow.app@gmail.com
+
+Website Information (STRICT TRUTH):
+{website_knowledge}"""
+    if transcript_context:
+        # Pass up to 3000 chars of transcript context safely to Groq
+        system_prompt += f"\n\nHere is the user's current audio transcript for context. If they ask about the audio or transcript, refer to this:\n{transcript_context[:3000]}"
+
+    # Structure messages for the Groq API
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in history:
+        messages.append({"role": msg["role"], "content": msg["content"]})
 
     try:
-        # 3. Generate Response
-        inputs = tokenizer(prompt, return_tensors="pt")
-        outputs = model.generate(
-            **inputs, 
-            max_new_tokens=150,   # Maximum length of the bot's reply
-            temperature=0.7,      # Creativity (0.0 is robotic, 1.0 is crazy)
-            top_p=0.9,
-            do_sample=True
+        # Call Groq API using Meta's ultra-fast Llama 3 8B model
+        chat_completion = groq_client.chat.completions.create(
+            messages=messages,
+            model="llama-3.1-8b-instant", 
+            temperature=0.7,
+            max_tokens=250,
+            top_p=0.9
         )
         
-        # 4. Decode and clean up the output
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        assistant_reply = chat_completion.choices[0].message.content.strip()
         
-        # TinyLlama outputs the whole prompt + response. We only want the assistant's part.
-        assistant_reply = response.split("<|assistant|>")[-1].strip()
+        # Save assistant response to session history
+        history.append({
+            "role": "assistant",
+            "content": assistant_reply
+        })
+        session["bot_history"] = history[-5:]
         
-        return jsonify({"response": assistant_reply})
+        return jsonify({"reply": assistant_reply})
         
     except Exception as e:
-        print(f"Chatbot Generation Error: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"Groq Chatbot Generation Error: {e}")
+        return jsonify({"reply": "I'm having trouble connecting to my neural network right now. Try again in a moment!"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
