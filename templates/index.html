@@ -366,6 +366,45 @@
             .section-title { font-size: 24px; }
         }
 
+        /* ========================================================
+           FAQ SECTION
+        ======================================================== */
+        .faq-section {
+            width: 100%; max-width: 800px; margin: 60px auto 60px; /* Adjusted margin to sit nicely below button */
+            padding: 0 20px; box-sizing: border-box; position: relative; z-index: 2;
+            opacity: 0; animation: fadeIn 1s ease-out 0.8s forwards;
+        }
+        .faq-title {
+            font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; font-weight: 900;
+            text-align: center; margin-bottom: 30px; color: #fff; text-shadow: 0 0 20px rgba(0,255,255,0.5);
+        }
+        .faq-item {
+            background: rgba(20, 20, 20, 0.9); border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 15px; margin-bottom: 15px; overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            backdrop-filter: blur(10px);
+        }
+        .faq-question {
+            padding: 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+            font-weight: 800; font-size: 15px; color: #fff; user-select: none;
+            transition: background 0.3s;
+        }
+        .faq-question:hover { color: #00ffff; background: rgba(0, 255, 255, 0.05); }
+        .faq-icon {
+            font-size: 22px; transition: transform 0.3s ease; color: #00ffff; font-weight: 400; line-height: 1;
+        }
+        .faq-answer {
+            max-height: 0; padding: 0 20px; color: rgba(255, 255, 255, 0.6);
+            font-size: 14px; line-height: 1.6; transition: all 0.3s ease; opacity: 0;
+        }
+        .faq-item.active {
+            border-color: #00ffff; box-shadow: 0 5px 20px rgba(0, 255, 255, 0.15);
+        }
+        .faq-item.active .faq-icon { transform: rotate(45deg); }
+        .faq-item.active .faq-answer {
+            max-height: 200px; padding: 0 20px 20px; opacity: 1;
+        }
+
         /* LANDING & APP */
         #landing-view {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -374,7 +413,7 @@
             transition: opacity 0.8s ease, transform 0.8s ease; box-sizing: border-box;
         }
         .landing-title { font-size: clamp(48px, 8vw, 90px); font-weight: 800; letter-spacing: -4px; line-height: 0.9; margin-bottom: 30px; background: linear-gradient(to bottom, #fff, #666); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .start-btn { background: #fff; color: #000; border: none; padding: 22px 50px; font-size: 18px; font-weight: 800; border-radius: 100px; cursor: pointer; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(255,255,255,0.1); margin-top: 20px; }
+        .start-btn { background: #fff; color: #000; border: none; padding: 22px 50px; font-size: 18px; font-weight: 800; border-radius: 100px; cursor: pointer; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(255,255,255,0.1); margin-top: 20px; margin-bottom: 20px; }
         .start-btn:hover { transform: scale(1.05); background: #00ffff; box-shadow: 0 0 30px rgba(0, 255, 255, 0.5); }
 
         #app-view { display: none; flex-direction: column; align-items: center; width: 100%; padding: 120px 20px 80px 20px; opacity: 0; transform: translateY(30px); transition: opacity 1s ease, transform 1s ease; box-sizing: border-box; }
@@ -692,7 +731,48 @@
                 </div>
             </div>
         </div>
+
         <button class="start-btn" onclick="enterApp()">Start Transcribing</button>
+
+        <div class="faq-section">
+            <h2 class="faq-title">Frequently Asked Questions</h2>
+            
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    What audio formats and sizes are supported? <span class="faq-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    Currently, TranscribeFlow supports local <strong>MP3</strong> and <strong>WAV</strong> files. To ensure rapid processing, the maximum file size limit for uploads is 50MB.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    Can I upload files from Google Drive or YouTube? <span class="faq-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    No, we prioritize strict security and data privacy. You must download the audio file to your local device first and upload it directly into our secure vault. We do not process external links.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    What languages can the AI translate my reports into? <span class="faq-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    Our dynamic translation engine supports English, Hindi, Spanish, French, German, Chinese (Simplified), Japanese, and Arabic. We even generate custom-formatted PDFs with proper text reshaping for right-to-left languages like Arabic.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question" onclick="toggleFaq(this)">
+                    What is FlowBot? <span class="faq-icon">+</span>
+                </div>
+                <div class="faq-answer">
+                    FlowBot is our built-in AI assistant. Once you upload an audio file, you can chat with FlowBot to ask specific questions about your transcript, request bullet points, or get help navigating the app.
+                </div>
+            </div>
+        </div>
     </section>
 
     <main id="app-view">
@@ -847,6 +927,19 @@
         ];
 
         // ══════════════════════════════════════════════════════════
+        // FAQ TOGGLE
+        // ══════════════════════════════════════════════════════════
+        function toggleFaq(element) {
+            const parent = element.parentElement;
+            // Close all other open FAQs first for a cleaner look
+            document.querySelectorAll('.faq-item').forEach(item => {
+                if (item !== parent) item.classList.remove('active');
+            });
+            // Toggle the clicked one
+            parent.classList.toggle('active');
+        }
+
+        // ══════════════════════════════════════════════════════════
         // BOT TRACKING & ANIMATIONS & CHAT
         // ══════════════════════════════════════════════════════════
         document.addEventListener('mousemove', (e) => {
@@ -944,13 +1037,23 @@
             typingIndicator.style.display = 'flex';
             document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
 
+            // --- GET JWT TOKEN ---
+            const token = localStorage.getItem('access_token');
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+
+            // Prepare the context with BOTH transcript and summary if they exist
+            let botContext = "";
+            if (masterSummary) botContext += "SUMMARY:\n" + masterSummary + "\n\n";
+            if (masterTranscript) botContext += "TRANSCRIPT:\n" + masterTranscript;
+
             // 3. Send to backend
             fetch('/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers, // Pass headers with token
                 body: JSON.stringify({ 
                     message: message,
-                    context: masterTranscript // Pass the transcript so bot can read it!
+                    context: botContext 
                 })
             })
             .then(res => res.json())
@@ -958,8 +1061,11 @@
                 typingIndicator.style.display = 'none';
                 if (data.error) {
                     appendMessage('bot', "Error: " + data.error);
+                } else if (data.detail) {
+                     // Catch auth errors from the token_required decorator
+                     appendMessage('bot', "Auth Error: " + data.detail + " Please log in to chat.");
                 } else {
-                    appendMessage('bot', data.response);
+                    appendMessage('bot', data.reply); 
                 }
             })
             .catch(err => {
