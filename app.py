@@ -3,6 +3,7 @@ load_dotenv()
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 import os
+import re
 import time
 import threading
 import io
@@ -12,22 +13,27 @@ import uuid
 import jwt
 import json
 import secrets
-import re
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, redirect, url_for, session
 from werkzeug.utils import secure_filename
 import whisper
 from deep_translator import GoogleTranslator
-from fpdf import FPDF
-import arabic_reshaper
-from bidi.algorithm import get_display
 from passlib.context import CryptContext
+
+# --- REPORTLAB IMPORTS ---
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont   # handles CJK with zero font files
 
 # --- TORCH AND TRANSFORMERS IMPORTS (For BART Summarization) ---
 import torch
 from transformers import BartForConditionalGeneration, BartTokenizer
 
-# --- GROQ API IMPORT (Replaces TinyLlama) ---
+# --- GROQ API IMPORT ---
 from groq import Groq
 
 # --- EMAIL IMPORTS ---
@@ -66,7 +72,6 @@ GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_REDIRECT_URI  = os.getenv("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/auth/google/callback")
 
-# Google OAuth Flow (disable HTTPS check for local dev)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 # ============================================================
@@ -76,9 +81,8 @@ pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 ALGORITHM = "HS256"
 DB_FILE = "users.json"
 
-# In-memory stores
-reset_tokens = {}  # {token: {email, expires}}
-otp_store = {}     # {email: {otp, expires}}
+reset_tokens = {}
+otp_store = {}
 
 # ============================================================
 # DATABASE HELPERS
@@ -87,7 +91,7 @@ def load_users():
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, 'r') as f:
-                return json.load(f)            
+                return json.load(f)
         except Exception as e:
             print(f"Error loading database: {e}")
             return {}
@@ -96,7 +100,7 @@ def load_users():
 def save_users():
     try:
         with open(DB_FILE, 'w') as f:
-            json.dump(users_db, f, indent=4)       
+            json.dump(users_db, f, indent=4)
     except Exception as e:
         print(f"Error saving database: {e}")
 
@@ -203,10 +207,8 @@ def token_required(f):
             auth_header = request.headers["Authorization"]
             if auth_header.startswith("Bearer "):
                 token = auth_header.split(" ")[1]
-        
         if not token:
             return jsonify({"detail": "Token is missing!"}), 401
-        
         try:
             data = jwt.decode(token, app.secret_key, algorithms=[ALGORITHM])
             current_user = users_db.get(data["sub"])
@@ -214,7 +216,6 @@ def token_required(f):
                 return jsonify({"detail": "User not found!"}), 401
         except Exception as e:
             return jsonify({"detail": "Token is invalid or expired!"}), 401
-            
         return f(current_user, *args, **kwargs)
     return decorated
 
@@ -285,7 +286,7 @@ This code is valid for 5 minutes. Do not share it with anyone.
 <html><body style="font-family:sans-serif; background:#0a0a0a; color:#fff; padding:40px; text-align:center;">
   <h2 style="color:#00ffff;">TranscribeFlow Login OTP</h2>
   <p>Enter this code to log in:</p>
-  <div style="font-size:32px; font-weight:900; color:#00ffff; background:rgba(0,255,255,0.1); 
+  <div style="font-size:32px; font-weight:900; color:#00ffff; background:rgba(0,255,255,0.1);
               padding:20px; border-radius:15px; display:inline-block; margin:20px 0; letter-spacing:8px;">
     {otp}
   </div>
@@ -312,14 +313,11 @@ This code is valid for 5 minutes. Do not share it with anyone.
 
 @app.route('/auth/register/request_otp', methods=['POST'])
 def register_request_otp():
-    """Send OTP to email before allowing registration"""
     data = request.get_json()
-
     if not data or 'email' not in data:
         return jsonify({"detail": "Missing email address"}), 400
 
     email = data['email'].strip().lower()
-
     if email in users_db:
         return jsonify({"detail": "This email is already registered. Please login instead."}), 400
 
@@ -327,22 +325,20 @@ def register_request_otp():
     otp_store[email] = {
         "otp": otp,
         "expires": datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
-        "verified": False  
+        "verified": False
     }
 
     sent = send_otp_email(email, otp)
-
     if not sent:
         otp_store.pop(email, None)
         return jsonify({"detail": "Could not send OTP. Please check SMTP configuration."}), 500
 
     return jsonify({"message": "OTP sent to your email. Please verify to continue registration."})
 
+
 @app.route('/auth/register', methods=['POST'])
 def register():
-    """Complete registration after OTP verification"""
     data = request.get_json()
-
     if not data or 'email' not in data or 'password' not in data or 'name' not in data or 'otp' not in data:
         return jsonify({"detail": "Missing required fields (name, email, password, otp)"}), 400
 
@@ -353,7 +349,6 @@ def register():
     otp      = data['otp'].strip()
 
     otp_data = otp_store.get(email)
-    
     if not otp_data:
         return jsonify({"detail": "No OTP found. Please request a new one."}), 400
 
@@ -382,7 +377,6 @@ def register():
 
     users_db[email] = user_details
     save_users()
-
     otp_store.pop(email, None)
 
     return jsonify({
@@ -396,10 +390,10 @@ def register():
         }
     })
 
+
 @app.route('/auth/login', methods=['POST'])
 def login():
     data = request.get_json()
-
     if not data or 'identifier' not in data or 'password' not in data:
         return jsonify({"detail": "Missing identifier (email/phone) or password"}), 400
 
@@ -407,7 +401,6 @@ def login():
     password   = data['password']
 
     email_key, user_record = find_user(identifier)
-
     if not user_record or not verify_password(password, user_record['password_hash']):
         return jsonify({"detail": "Invalid credentials"}), 401
 
@@ -422,15 +415,14 @@ def login():
         "name":         user_record['name']
     })
 
+
 @app.route('/auth/request_otp', methods=['POST'])
 def request_otp():
     data = request.get_json()
-
     if not data or 'email' not in data:
         return jsonify({"detail": "Missing email address"}), 400
 
     email = data['email'].strip().lower()
-
     if email not in users_db:
         return jsonify({"message": "If that email is registered, an OTP has been sent."})
 
@@ -441,17 +433,16 @@ def request_otp():
     }
 
     sent = send_otp_email(email, otp)
-
     if not sent:
         otp_store.pop(email, None)
         return jsonify({"detail": "Could not send OTP. Please check SMTP configuration."}), 500
 
     return jsonify({"message": "If that email is registered, an OTP has been sent."})
 
+
 @app.route('/auth/verify_otp', methods=['POST'])
 def verify_otp():
     data = request.get_json()
-
     if not data or 'email' not in data or 'otp' not in data:
         return jsonify({"detail": "Missing email or OTP"}), 400
 
@@ -459,7 +450,6 @@ def verify_otp():
     otp   = data['otp'].strip()
 
     otp_data = otp_store.get(email)
-    
     if not otp_data:
         return jsonify({"detail": "Invalid or expired OTP."}), 400
 
@@ -471,17 +461,16 @@ def verify_otp():
         return jsonify({"detail": "Incorrect OTP."}), 401
 
     otp_store.pop(email, None)
-
     if email not in users_db:
         return jsonify({"detail": "User not found."}), 404
 
     user_record = users_db[email]
-
     return jsonify({
         "access_token": create_token(email),
         "user_id":      user_record['user_id'],
         "name":         user_record['name']
     })
+
 
 @app.route('/auth/google/login')
 def google_login():
@@ -498,18 +487,17 @@ def google_login():
                 "redirect_uris": [GOOGLE_REDIRECT_URI]
             }
         },
-        scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", 
+        scopes=["openid", "https://www.googleapis.com/auth/userinfo.email",
                 "https://www.googleapis.com/auth/userinfo.profile"]
     )
     flow.redirect_uri = GOOGLE_REDIRECT_URI
-
     authorization_url, state = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true'
     )
-
     session['state'] = state
     return redirect(authorization_url)
+
 
 @app.route('/auth/google/callback')
 def google_callback():
@@ -517,7 +505,6 @@ def google_callback():
         return "Google OAuth not configured", 500
 
     state = session.get('state')
-
     flow = Flow.from_client_config(
         {
             "web": {
@@ -533,45 +520,39 @@ def google_callback():
         state=state
     )
     flow.redirect_uri = GOOGLE_REDIRECT_URI
-
     flow.fetch_token(authorization_response=request.url)
 
     credentials = flow.credentials
     request_session = google_requests.Request()
-
     id_info = id_token.verify_oauth2_token(
         credentials.id_token, request_session, GOOGLE_CLIENT_ID, clock_skew_in_seconds=10
     )
 
     email = id_info.get('email')
     name  = id_info.get('name', email.split('@')[0])
-
     if not email:
         return "Could not retrieve email from Google", 400
 
     email = email.lower()
-
     if email not in users_db:
         new_user_obj = User(name, email, phone="")
         user_details = new_user_obj.register()
-        user_details['password_hash'] = ""  
+        user_details['password_hash'] = ""
         users_db[email] = user_details
         save_users()
 
     user_record = users_db[email]
     token = create_token(email)
-
     return redirect(f"/?google_login=success&token={token}&name={user_record['name']}&user_id={user_record['user_id']}")
+
 
 @app.route('/auth/forgot_password', methods=['POST'])
 def forgot_password():
     data = request.get_json()
-
     if not data or 'email' not in data:
         return jsonify({"detail": "Missing email address"}), 400
 
     email = data['email'].strip().lower()
-
     if email not in users_db:
         return jsonify({"message": "If that email is registered, a reset link has been sent."})
 
@@ -582,22 +563,22 @@ def forgot_password():
     }
 
     sent = send_reset_email(email, token)
-
     if not sent:
         reset_tokens.pop(token, None)
         return jsonify({"detail": "Could not send reset email. Please check SMTP configuration."}), 500
 
     return jsonify({"message": "If that email is registered, a reset link has been sent."})
 
+
 @app.route('/auth/reset_password_page', methods=['GET'])
 def reset_password_page():
     token = request.args.get('token', '')
     return render_template('reset_password.html', token=token)
 
+
 @app.route('/auth/reset_password', methods=['POST'])
 def reset_password():
     data = request.get_json()
-
     if not data or 'token' not in data or 'new_password' not in data:
         return jsonify({"detail": "Missing token or new_password"}), 400
 
@@ -708,6 +689,7 @@ def run_transcription(file_path, filename):
         print(f"ERROR in run_transcription for {filename}: {e}")
         processing_jobs[filename] = {'status': 'error', 'message': str(e), 'progress': 0}
 
+
 @app.route('/')
 def index():
     files = []
@@ -715,30 +697,24 @@ def index():
         for f in os.listdir(UPLOAD_FOLDER):
             if allowed_file(f):
                 path = os.path.join(UPLOAD_FOLDER, f)
-                
                 file_size_bytes = os.path.getsize(path)
-                
                 if file_size_bytes >= 1024 * 1024:
                     size_str = f"{file_size_bytes / (1024 * 1024):.1f} MB"
                 else:
                     size_str = f"{file_size_bytes / 1024:.1f} KB"
-                
                 file_type = f.rsplit('.', 1)[1].upper() if '.' in f else 'UNKNOWN'
-                
                 raw_time = os.path.getmtime(path)
-                
                 files.append({
-                    'name': f, 
+                    'name': f,
                     'time': time.ctime(raw_time),
                     'timestamp': raw_time,
                     'size': file_size_bytes,
                     'size_str': size_str,
                     'type': file_type
                 })
-    
     files.sort(key=lambda x: x['timestamp'], reverse=True)
-    
     return render_template('index.html', files=files)
+
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -760,16 +736,18 @@ def upload_file():
         print(f"UPLOAD ROUTE ERROR: {e}")
         return jsonify({'error': f"Server Error: {str(e)}"}), 500
 
+
 @app.route('/check_status/<filename>')
 def check_status(filename):
     status_data = processing_jobs.get(filename, {'status': 'initializing', 'progress': 5})
     return jsonify(status_data)
 
+
 @app.route('/translate_on_fly', methods=['POST'])
 def translate_on_fly():
-    data       = request.get_json()
-    transcript = data.get('transcript', '')
-    summary    = data.get('summary', '')
+    data        = request.get_json()
+    transcript  = data.get('transcript', '')
+    summary     = data.get('summary', '')
     target_lang = data.get('target', 'en')
     try:
         translator = GoogleTranslator(source='auto', target=target_lang)
@@ -780,6 +758,228 @@ def translate_on_fly():
         return jsonify({'success': True, 'translated_text': translated_text, 'translated_summary': translated_summary})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================
+# MULTILINGUAL PDF GENERATION
+# ============================================================
+
+# Directory where TTF font files live (Arabic, Hindi, Latin only)
+# CJK languages use ReportLab's built-in CID fonts — no font files needed.
+FONTS_DIR = os.path.join(os.getcwd(), 'fonts')
+
+# ── CID fonts (built into every ReportLab installation) ──────────────────────
+# These are PDF standard CJK fonts. Zero external files required.
+# The PDF viewer on the end-user's machine supplies the actual glyphs,
+# which is why characters render correctly.
+CID_FONT_MAP = {
+    'ja':    'HeiseiKakuGo-W5',   # Japanese
+    'zh':    'STSong-Light',       # Chinese Simplified
+    'zh-cn': 'STSong-Light',       # Chinese Simplified
+    'zh-tw': 'STSong-Light',       # Chinese Traditional (best available built-in)
+    'ko':    'HYGothic-Medium',    # Korean
+}
+
+# ── TTF fonts (files must exist in FONTS_DIR) ─────────────────────────────────
+TTF_FONT_MAP = {
+    'NotoSansArabic':     'NotoSansArabic-Regular.ttf',
+    'NotoSansDevanagari': 'NotoSansDevanagari-Regular.ttf',
+    'NotoSans':           'NotoSans-Regular.ttf',
+}
+
+_cid_registered = set()
+_ttf_registered = set()
+
+
+def _register_cid(cid_name: str) -> bool:
+    """Register a CID font with pdfmetrics once. Returns True on success."""
+    if cid_name in _cid_registered:
+        return True
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont(cid_name))
+        _cid_registered.add(cid_name)
+        print(f"Registered CID font: {cid_name}")
+        return True
+    except Exception as e:
+        print(f"WARNING: Could not register CID font '{cid_name}': {e}")
+        return False
+
+
+def _register_ttf(font_name: str) -> bool:
+    """Register a TTF font from FONTS_DIR with pdfmetrics once. Returns True on success."""
+    if font_name in _ttf_registered:
+        return True
+    filename = TTF_FONT_MAP.get(font_name)
+    if not filename:
+        return False
+    path = os.path.join(FONTS_DIR, filename)
+    if not os.path.exists(path):
+        print(f"WARNING: TTF font file not found: {path}  (run get_fonts.py to download it)")
+        return False
+    try:
+        pdfmetrics.registerFont(TTFont(font_name, path))
+        _ttf_registered.add(font_name)
+        print(f"Registered TTF font: {font_name}")
+        return True
+    except Exception as e:
+        print(f"WARNING: Could not register TTF font '{font_name}': {e}")
+        return False
+
+
+def _xml_escape(text: str) -> str:
+    """Escape &, <, > so ReportLab's XML Paragraph parser doesn't crash."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _get_font_config(language: str) -> dict:
+    """
+    Return rendering configuration for the given language code.
+
+    Returned dict keys:
+        font_name  – name to pass to ParagraphStyle
+        word_wrap  – 'CJK' for Japanese/Chinese/Korean, 'LTR' otherwise
+        alignment  – 0 = left, 2 = right (Arabic/RTL)
+        ok         – True if font registered successfully
+    """
+    lang = (language or 'en').lower().strip()
+
+    # ── CJK: use built-in CID fonts (no file needed) ──────────────────────
+    if lang in CID_FONT_MAP:
+        cid_name = CID_FONT_MAP[lang]
+        ok = _register_cid(cid_name)
+        return {
+            'font_name': cid_name if ok else 'Helvetica',
+            'word_wrap': 'CJK',
+            'alignment': 0,
+            'ok':        ok,
+        }
+
+    # ── Arabic / Persian / Urdu: TTF + right-align ────────────────────────
+    if lang in ('ar', 'fa', 'ur'):
+        ok = _register_ttf('NotoSansArabic')
+        return {
+            'font_name': 'NotoSansArabic' if ok else 'Helvetica',
+            'word_wrap': 'LTR',
+            'alignment': 2,   # right-align
+            'ok':        ok,
+        }
+
+    # ── Hindi / Devanagari: TTF ────────────────────────────────────────────
+    if lang == 'hi':
+        ok = _register_ttf('NotoSansDevanagari')
+        return {
+            'font_name': 'NotoSansDevanagari' if ok else 'Helvetica',
+            'word_wrap': 'LTR',
+            'alignment': 0,
+            'ok':        ok,
+        }
+
+    # ── Latin / default ───────────────────────────────────────────────────
+    ok = _register_ttf('NotoSans')
+    return {
+        'font_name': 'NotoSans' if ok else 'Helvetica',
+        'word_wrap': 'LTR',
+        'alignment': 0,
+        'ok':        ok,
+    }
+
+
+def create_multilingual_pdf(output_path: str, title: str,
+                             transcription: str, summary: str,
+                             language: str = 'en') -> None:
+    """
+    Build a properly-rendered multilingual PDF.
+
+    CJK languages (ja, zh, zh-cn, zh-tw, ko) use ReportLab's built-in
+    CID fonts — no downloaded font files needed, guaranteed glyph rendering.
+
+    Arabic / Hindi use Noto TTF files from ./fonts/.
+    Latin falls back to NotoSans TTF or Helvetica.
+    """
+    fc        = _get_font_config(language)
+    font_name = fc['font_name']
+    word_wrap = fc['word_wrap']
+    alignment = fc['alignment']
+
+    if not fc['ok']:
+        print(f"WARNING: Falling back to Helvetica for lang='{language}'. "
+              "Non-Latin characters may render as boxes.")
+
+    lang_label = language.upper() if language and language not in ('auto', '') else ''
+
+    # ── Paragraph styles ──────────────────────────────────────────────────
+    title_style = ParagraphStyle(
+        "TFTitle",
+        fontName=font_name,
+        fontSize=18,
+        leading=26,
+        alignment=1,           # always centre
+        spaceAfter=8,
+    )
+    heading_style = ParagraphStyle(
+        "TFHeading",
+        fontName=font_name,
+        fontSize=13,
+        leading=18,
+        alignment=alignment,
+        spaceBefore=12,
+        spaceAfter=4,
+    )
+    body_style = ParagraphStyle(
+        "TFBody",
+        fontName=font_name,
+        fontSize=10,
+        leading=15,
+        alignment=alignment,
+        wordWrap=word_wrap,
+        spaceAfter=3,
+    )
+
+    # ── Flowables ─────────────────────────────────────────────────────────
+    story = []
+    story.append(Paragraph(_xml_escape(title), title_style))
+    story.append(HRFlowable(width="100%", thickness=1, color="#00aacc"))
+    story.append(Spacer(1, 5 * mm))
+
+    summary_heading = f"Summary ({lang_label})" if lang_label else "Summary"
+    story.append(Paragraph(_xml_escape(summary_heading), heading_style))
+
+    if summary and summary.strip():
+        for para in summary.split('\n'):
+            if para.strip():
+                story.append(Paragraph(_xml_escape(para), body_style))
+    else:
+        story.append(Paragraph("No summary available.", body_style))
+
+    story.append(Spacer(1, 6 * mm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color="#cccccc"))
+
+    transcript_heading = f"Transcript ({lang_label})" if lang_label else "Transcript"
+    story.append(Paragraph(_xml_escape(transcript_heading), heading_style))
+
+    if transcription and transcription.strip():
+        for line in transcription.split('\n'):
+            if line.strip():
+                story.append(Paragraph(_xml_escape(line), body_style))
+    else:
+        story.append(Paragraph("No transcription available.", body_style))
+
+    # ── Build ─────────────────────────────────────────────────────────────
+    doc = SimpleDocTemplate(
+        output_path,
+        pagesize=A4,
+        rightMargin=20 * mm,
+        leftMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+    )
+    doc.build(story)
+    print(f"PDF generated: {output_path}  (font={font_name}, lang={language})")
+
+
+# ============================================================
+# DOWNLOAD ROUTE
+# ============================================================
 
 @app.route('/download/<filename>')
 def download_file(filename):
@@ -797,6 +997,7 @@ def download_file(filename):
     with open(summary_path, "r", encoding="utf-8") as f:
         summary = f.read()
 
+    # Translate if needed
     if target_lang != 'en':
         try:
             translator = GoogleTranslator(source='auto', target=target_lang)
@@ -814,58 +1015,37 @@ def download_file(filename):
 
     if file_type == 'pdf':
         try:
-            pdf      = FPDF()
-            pdf.set_auto_page_break(auto=True, margin=15)
-            font_map = {
-                'hi': 'NotoSansDevanagari-Regular.ttf',
-                'ja': 'NotoSansJP-Regular.ttf',
-                'ar': 'NotoSansArabic-Regular.ttf',
-                'en': 'NotoSans-Regular.ttf'
-            }
-            desired_font = font_map.get(target_lang, 'NotoSans-Regular.ttf')
+            safe_base    = secure_filename(filename)
+            pdf_filename = f"{safe_base}_{target_lang}.pdf"
+            pdf_path     = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename)
 
-            # --- NEW: Font Existence Check with Terminal Warnings ---
-            if os.path.exists(desired_font):
-                pdf.add_font("CustomFont", style="", fname=desired_font)
-                family = "CustomFont"
-            elif os.path.exists('NotoSans-Regular.ttf'):
-                print(f"WARNING: Missing {desired_font}. Falling back to English NotoSans.")
-                pdf.add_font("CustomFont", style="", fname='NotoSans-Regular.ttf')
-                family = "CustomFont"
-            else:
-                print(f"CRITICAL WARNING: Missing all custom fonts. Falling back to Arial. Translations WILL be garbled.")
-                family = "Arial"
-
-            pdf.add_page()
-
-            def format_for_pdf(text, lang_code):
-                if not text: return ""
-                if lang_code == 'ar':
-                    return get_display(arabic_reshaper.reshape(text))
-                return text
-
-            pdf.set_font(family, size=20)
-            pdf.cell(0, 15, txt="TranscribeFlow Report", ln=True, align='C')
-            pdf.ln(5)
-            pdf.set_font(family, size=14)
-            pdf.cell(0, 10, txt=f"Summary ({target_lang.upper()}):", ln=True)
-            pdf.set_font(family, size=11)
-            pdf.multi_cell(0, 7, txt=format_for_pdf(summary, target_lang))
-            pdf.ln(10)
-            pdf.set_font(family, size=14)
-            pdf.cell(0, 10, txt=f"Transcript ({target_lang.upper()}):", ln=True)
-            pdf.set_font(family, size=10)
-            pdf.multi_cell(0, 6, txt=format_for_pdf(transcript, target_lang))
-
-            pdf_output = pdf.output()
-            return Response(
-                bytes(pdf_output),
-                mimetype="application/pdf",
-                headers={"Content-Disposition": f"attachment;filename={filename}_{target_lang}.pdf"}
+            create_multilingual_pdf(
+                output_path=pdf_path,
+                title="TranscribeFlow Report",
+                transcription=transcript,
+                summary=summary,
+                language=target_lang,
             )
+
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+
+            try:
+                os.remove(pdf_path)
+            except Exception:
+                pass
+
+            return Response(
+                pdf_bytes,
+                mimetype="application/pdf",
+                headers={"Content-Disposition": f"attachment;filename={pdf_filename}"}
+            )
+
         except Exception as e:
+            print(f"PDF generation error: {e}")
             return f"Error generating PDF: {str(e)}", 500
 
+    # Plain-text download
     txt_content = f"SUMMARY:\n{summary}\n\nTRANSCRIPT:\n{transcript}"
     return Response(
         txt_content.encode('utf-8'),
@@ -873,9 +1053,11 @@ def download_file(filename):
         headers={"Content-Disposition": f"attachment;filename={filename}_{target_lang}.txt"}
     )
 
+
 @app.route('/serve_audio/<filename>')
 def serve_audio(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 
 @app.route('/delete/<filename>', methods=['POST'])
 def delete_file(filename):
@@ -891,6 +1073,7 @@ def delete_file(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/clear_all', methods=['POST'])
 def clear_all():
     if os.path.exists(UPLOAD_FOLDER):
@@ -901,16 +1084,17 @@ def clear_all():
                 pass
     return index()
 
+
 # ============================================================
 # CHATBOT ROUTE (Powered by Groq)
 # ============================================================
 
 @app.route('/chat', methods=['POST'])
 @token_required
-def chat_with_bot(current_user): 
+def chat_with_bot(current_user):
     data = request.get_json()
-    user_message = data.get('message', '').strip()
-    transcript_context = data.get('context', '') 
+    user_message       = data.get('message', '').strip()
+    transcript_context = data.get('context', '')
 
     if not user_message:
         return jsonify({"reply": "Message cannot be empty"}), 400
@@ -918,7 +1102,6 @@ def chat_with_bot(current_user):
     if not groq_client:
         return jsonify({"reply": "Groq API key is missing. The Chatbot is currently offline."}), 500
 
-    # ---------- Website Knowledge ----------
     website_knowledge = """
 TranscribeFlow is an AI audio transcription web app.
 
@@ -930,29 +1113,21 @@ Features & Workflows:
 - Generates timestamped transcription using Whisper.
 - Generates AI summary using BART.
 - Supports dynamic translation via GoogleTranslator.
-- Export as TXT or Multilingual PDF (with custom fonts & Arabic text reshaping).
+- Export as TXT or Multilingual PDF (correct fonts for Japanese, Chinese, Korean, Arabic, Hindi).
 - Secure JWT authentication & Argon2 hashing.
 """
-    
-    # ---------- Conversation Memory ----------
+
     history = session.get("bot_history", [])
-
-    history.append({
-        "role": "user",
-        "content": user_message
-    })
-
-    # Keep only the last 5 messages for context
+    history.append({"role": "user", "content": user_message})
     history = history[-5:]
     session["bot_history"] = history
 
-    # ---------- Prompt Building ----------
     system_prompt = f"""You are FlowBot, the AI assistant for TranscribeFlow.
 
 Rules:
 - Be friendly, helpful, and conversational.
 - Answer general questions naturally, but prioritize helping with TranscribeFlow.
-- STRICT RULE: NEVER invent features, cloud integrations, or supported platforms that are not listed in the Website Information.
+- STRICT RULE: NEVER invent features, cloud integrations, or supported platforms not listed in the Website Information.
 - If a user has upload trouble, tell them to ensure it is an MP3 or WAV file and to click the 'Select Audio' pod.
 - Keep responses concise (under 6 lines if possible).
 - Use bullet points if helpful.
@@ -964,39 +1139,31 @@ transcribeflow.app@gmail.com
 
 Website Information (STRICT TRUTH):
 {website_knowledge}"""
-    if transcript_context:
-        # Pass up to 3000 chars of transcript context safely to Groq
-        system_prompt += f"\n\nHere is the user's current audio transcript for context. If they ask about the audio or transcript, refer to this:\n{transcript_context[:3000]}"
 
-    # Structure messages for the Groq API
+    if transcript_context:
+        system_prompt += f"\n\nHere is the user's current audio transcript for context:\n{transcript_context[:3000]}"
+
     messages = [{"role": "system", "content": system_prompt}]
     for msg in history:
         messages.append({"role": msg["role"], "content": msg["content"]})
 
     try:
-        # Call Groq API using Meta's ultra-fast Llama 3 8B model
         chat_completion = groq_client.chat.completions.create(
             messages=messages,
-            model="llama-3.1-8b-instant", 
+            model="llama-3.1-8b-instant",
             temperature=0.7,
             max_tokens=250,
             top_p=0.9
         )
-        
         assistant_reply = chat_completion.choices[0].message.content.strip()
-        
-        # Save assistant response to session history
-        history.append({
-            "role": "assistant",
-            "content": assistant_reply
-        })
+        history.append({"role": "assistant", "content": assistant_reply})
         session["bot_history"] = history[-5:]
-        
         return jsonify({"reply": assistant_reply})
-        
+
     except Exception as e:
         print(f"Groq Chatbot Generation Error: {e}")
         return jsonify({"reply": "I'm having trouble connecting to my neural network right now. Try again in a moment!"}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
