@@ -833,10 +833,16 @@
                 <button id="translate-btn" class="translate-action-btn" onclick="translateReport()">Update Language</button>
             </div>
 
-            <span class="result-label">Full Transcription</span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="result-label">Full Transcription</span>
+                <button onclick="copyToClipboard('dynamic-transcript-box')" class="translate-action-btn" style="padding: 5px 12px; font-size: 10px; margin-bottom: 10px;">📋 Copy</button>
+            </div>
             <div id="dynamic-transcript-box" class="transcript-box"></div>
 
-            <span class="result-label">AI Summary</span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="result-label">AI Summary</span>
+                <button onclick="copyToClipboard('dynamic-summary-box')" class="translate-action-btn" style="padding: 5px 12px; font-size: 10px; margin-bottom: 10px;">📋 Copy</button>
+            </div>
             <div id="dynamic-summary-box" class="summary-box"></div>
 
             <div class="download-actions">
@@ -846,7 +852,12 @@
         </div>
 
         <div class="filter-bar">
-            <h2 style="margin: 0;">History</h2>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <h2 style="margin: 0;">History</h2>
+                <input type="text" id="history-search" class="lang-select" 
+                       placeholder="🔍 Search history..." oninput="searchHistory()" 
+                       style="max-width: 250px; font-size: 12px;">
+            </div>
             <div style="display: flex; gap: 10px; align-items: center;">
                 <span style="font-size: 12px; opacity: 0.6;">Sort by:</span>
                 <select id="sort-filter" class="sort-select" onchange="sortFiles()">
@@ -927,15 +938,43 @@
         ];
 
         // ══════════════════════════════════════════════════════════
+        // NEW UTILITIES: CLIPBOARD & SEARCH
+        // ══════════════════════════════════════════════════════════
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.innerText || element.textContent;
+
+            navigator.clipboard.writeText(text).then(() => {
+                launchToast("COPIED TO CLIPBOARD");
+                speak("Text copied to your clipboard!");
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                launchToast("Copy Failed", "delete");
+            });
+        }
+
+        function searchHistory() {
+            const query = document.getElementById('history-search').value.toLowerCase();
+            const fileItems = document.querySelectorAll('.file-item');
+
+            fileItems.forEach(item => {
+                const fileName = item.querySelector('span[style*="font-weight: 600"]').textContent.toLowerCase();
+                if (fileName.includes(query)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════
         // FAQ TOGGLE
         // ══════════════════════════════════════════════════════════
         function toggleFaq(element) {
             const parent = element.parentElement;
-            // Close all other open FAQs first for a cleaner look
             document.querySelectorAll('.faq-item').forEach(item => {
                 if (item !== parent) item.classList.remove('active');
             });
-            // Toggle the clicked one
             parent.classList.toggle('active');
         }
 
@@ -989,7 +1028,6 @@
             }
         }
 
-        // --- NEW: CHAT FUNCTIONS ---
         function toggleChatWindow(event) {
             if (event) event.stopPropagation();
             const chatWindow = document.getElementById('chat-window');
@@ -998,7 +1036,7 @@
             if (isChatOpen) {
                 chatWindow.classList.add('open');
                 document.getElementById('chat-input').focus();
-                botBubble.classList.remove('show'); // Hide small bubble when big chat is open
+                botBubble.classList.remove('show'); 
             } else {
                 chatWindow.classList.remove('open');
             }
@@ -1018,7 +1056,6 @@
             msgDiv.classList.add('chat-msg', sender);
             msgDiv.innerText = text;
             
-            // Insert message before the typing indicator
             chatBody.insertBefore(msgDiv, typingIndicator);
             chatBody.scrollTop = chatBody.scrollHeight;
         }
@@ -1028,29 +1065,24 @@
             const message = inputEl.value.trim();
             if (!message) return;
 
-            // 1. Display user message
             appendMessage('user', message);
             inputEl.value = '';
             
-            // 2. Show typing indicator
             const typingIndicator = document.getElementById('typing-indicator');
             typingIndicator.style.display = 'flex';
             document.getElementById('chat-body').scrollTop = document.getElementById('chat-body').scrollHeight;
 
-            // --- GET JWT TOKEN ---
             const token = localStorage.getItem('access_token');
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = 'Bearer ' + token;
 
-            // Prepare the context with BOTH transcript and summary if they exist
             let botContext = "";
             if (masterSummary) botContext += "SUMMARY:\n" + masterSummary + "\n\n";
             if (masterTranscript) botContext += "TRANSCRIPT:\n" + masterTranscript;
 
-            // 3. Send to backend
             fetch('/chat', {
                 method: 'POST',
-                headers: headers, // Pass headers with token
+                headers: headers,
                 body: JSON.stringify({ 
                     message: message,
                     context: botContext 
@@ -1062,7 +1094,6 @@
                 if (data.error) {
                     appendMessage('bot', "Error: " + data.error);
                 } else if (data.detail) {
-                     // Catch auth errors from the token_required decorator
                      appendMessage('bot', "Auth Error: " + data.detail + " Please log in to chat.");
                 } else {
                     appendMessage('bot', data.reply); 
@@ -1075,12 +1106,10 @@
             });
         }
 
-
         // ══════════════════════════════════════════════════════════
         // AUTH MODAL CONTROLS
         // ══════════════════════════════════════════════════════════
         function openAuthModal() {
-            // Only open auth if chat isn't open and they click the bot
             if(!isChatOpen && document.getElementById('user-greeting').style.display === 'none') {
                 const modal = document.getElementById('auth-modal');
                 modal.style.display = 'flex';
@@ -1151,9 +1180,6 @@
             input.value = '';
         }
 
-        // ══════════════════════════════════════════════════════════
-        // PASSWORD STRENGTH METER
-        // ══════════════════════════════════════════════════════════
         function checkPasswordStrength(password) {
             const ruleLen     = document.getElementById('rule-len');
             const ruleUpper   = document.getElementById('rule-upper');
