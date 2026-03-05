@@ -172,7 +172,7 @@ def verify_password(password, hashed):
 def create_token(email):
     payload = {
         "sub": email,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=6)
+        "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=6)
     }
     return jwt.encode(payload, app.secret_key, algorithm=ALGORITHM)
 
@@ -324,7 +324,7 @@ def register_request_otp():
     otp = str(random.randint(100000, 999999))
     otp_store[email] = {
         "otp": otp,
-        "expires": datetime.datetime.utcnow() + datetime.timedelta(minutes=10),
+        "expires": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10),
         "verified": False
     }
 
@@ -352,7 +352,7 @@ def register():
     if not otp_data:
         return jsonify({"detail": "No OTP found. Please request a new one."}), 400
 
-    if datetime.datetime.utcnow() > otp_data['expires']:
+    if datetime.datetime.now(datetime.timezone.utc) > otp_data['expires']:
         otp_store.pop(email, None)
         return jsonify({"detail": "OTP has expired. Please request a new one."}), 400
 
@@ -429,7 +429,7 @@ def request_otp():
     otp = str(random.randint(100000, 999999))
     otp_store[email] = {
         "otp": otp,
-        "expires": datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+        "expires": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=5)
     }
 
     sent = send_otp_email(email, otp)
@@ -453,7 +453,7 @@ def verify_otp():
     if not otp_data:
         return jsonify({"detail": "Invalid or expired OTP."}), 400
 
-    if datetime.datetime.utcnow() > otp_data['expires']:
+    if datetime.datetime.now(datetime.timezone.utc) > otp_data['expires']:
         otp_store.pop(email, None)
         return jsonify({"detail": "OTP has expired. Please request a new one."}), 400
 
@@ -559,7 +559,7 @@ def forgot_password():
     token = secrets.token_urlsafe(48)
     reset_tokens[token] = {
         "email":   email,
-        "expires": datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+        "expires": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=30)
     }
 
     sent = send_reset_email(email, token)
@@ -589,7 +589,7 @@ def reset_password():
     if not token_data:
         return jsonify({"detail": "Invalid or expired reset token."}), 400
 
-    if datetime.datetime.utcnow() > token_data['expires']:
+    if datetime.datetime.now(datetime.timezone.utc) > token_data['expires']:
         reset_tokens.pop(token, None)
         return jsonify({"detail": "Reset token has expired. Please request a new one."}), 400
 
